@@ -634,7 +634,7 @@ void UGMCE_OrganicMovementCmp::DisableRagdoll()
 
 void UGMCE_OrganicMovementCmp::SetRagdollActive(bool bActive)
 {
-	if (IsNetworkedServer()) return;
+	if (IsNetMode(NM_DedicatedServer)) return;
 	
 	if (bActive)
 	{
