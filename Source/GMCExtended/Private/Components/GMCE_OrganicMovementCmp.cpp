@@ -45,8 +45,7 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 	else if (bFirstRagdollTick)
 	{
 		bFirstRagdollTick = false;
-		SkeletalMesh->SetAllPhysicsLinearVelocity(RagdollLinearVelocity);
-		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 3.0f, FColor::Black, *RagdollLinearVelocity.ToCompactString());
+		SkeletalMesh->SetAllBodiesBelowLinearVelocity(FName(TEXT("pelvis")), RagdollLinearVelocity, true);
 	}
 
 
