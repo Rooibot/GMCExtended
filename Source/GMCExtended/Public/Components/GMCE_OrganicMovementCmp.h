@@ -240,6 +240,8 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="Ragdoll")
 	bool RagdollActive() const { return bWantsRagdoll; }
+
+	virtual EGMC_MovementMode GetRagdollMode() const { return EGMC_MovementMode::Custom1; }
 	
 private:
 
@@ -252,6 +254,10 @@ private:
 	bool bFirstRagdollTick { false };
 
 	FVector RagdollLinearVelocity { 0.f };
+
+	FVector PreviousRelativeMeshLocation { 0.f };
+	FRotator PreviousRelativeMeshRotation { 0.f };
+	float PreviousCollisionHalfHeight { 0.f };
 	
 #pragma endregion
 		
