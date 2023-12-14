@@ -1,0 +1,30 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "GMCExtended",
+	"Description": "A collection of utilities and more-specialized components for GMCv2 -- things beyond the scope of the base plugin -- as provided by GMC users.",
+	"Category": "GRIMTEC",
+	"CreatedBy": "GMCv2 Licensee Community",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GMCExtended",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GMC",
+			"Enabled": true
+		}
+	]
+}
