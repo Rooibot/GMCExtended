@@ -17,6 +17,12 @@ This is an extension of GMCv2's Organic Movement Component, adding a few things:
 * Debug visualization options for the above two
 * A very, _very_ basic ragdoll mode
 
+**Trajectory:**  
+[![Trajectory example video](http://img.youtube.com/vi/y0oFou7ww64/0.jpg)](https://www.youtube.com/watch?v=y0oFou7ww64)
+
+**Ragdoll:**  
+[![Ragdoll example video](http://img.youtube.com/vi/Vipoc2ISJp0/0.jpg)](https://www.youtube.com/watch?v=Vipoc2ISJp0)
+
 Some details...
 
 ### Stop/Pivot Prediction
