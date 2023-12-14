@@ -34,6 +34,9 @@ public:
 	virtual void GenSimulationTick_Implementation(float DeltaTime) override;
 	virtual bool UpdateMovementModeDynamic_Implementation(FGMC_FloorParams& Floor, float DeltaSeconds) override;
 	virtual void OnMovementModeChanged_Implementation(EGMC_MovementMode PreviousMovementMode) override;
+	virtual void OnMovementModeChangedSimulated_Implementation(EGMC_MovementMode PreviousMovementMode) override;
+
+	virtual float GetInputAccelerationCustom_Implementation() const override;
 	
 	// Utilities
 
@@ -239,12 +242,16 @@ public:
 	bool RagdollActive() const { return bWantsRagdoll; }
 	
 private:
+
+	void SetRagdollActive(bool bActive);
 	
 	bool bWantsRagdoll { false };
 	int32 BI_WantsRagdoll { -1 };
 
-	// If true, we need to put our skeletal mesh back where we found it on the next component tick.
 	bool bResetMesh { false };
+	bool bFirstRagdollTick { false };
+
+	FVector RagdollLinearVelocity { 0.f };
 	
 #pragma endregion
 		

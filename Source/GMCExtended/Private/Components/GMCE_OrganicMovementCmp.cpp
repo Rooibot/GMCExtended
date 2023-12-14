@@ -42,6 +42,13 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 		SkeletalMesh->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -GetRootCollisionHalfHeight(true)), FRotator(0.f, -90.f, 0.f));
 		bResetMesh = false;
 	}
+	else if (bFirstRagdollTick)
+	{
+		bFirstRagdollTick = false;
+		SkeletalMesh->SetAllPhysicsLinearVelocity(RagdollLinearVelocity);
+		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 3.0f, FColor::Black, *RagdollLinearVelocity.ToCompactString());
+	}
+
 
 	// Store a timestamp when we last had input, for use as a grace period on input.
 	if (bHadInput && !IsInputPresent())
@@ -174,15 +181,15 @@ void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
 
 bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_FloorParams& Floor, float DeltaSeconds)
 {
-	if (bWantsRagdoll != SkeletalMesh->IsSimulatingPhysics())
+	if (bWantsRagdoll != (GetMovementMode() == MovementRagdoll))
 	{
 		// We need to either enable or disable ragdoll mode.
 		if (bWantsRagdoll)
 		{
+			RagdollLinearVelocity = GetLinearVelocity_GMC();
 			HaltMovement();
 		}
 		SetMovementMode(bWantsRagdoll ? MovementRagdoll : EGMC_MovementMode::Grounded);
-		SkeletalMesh->SetAllBodiesBelowSimulatePhysics(FName(TEXT("pelvis")), bWantsRagdoll, true);
 		return true;
 	}
 	
@@ -191,12 +198,40 @@ bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_Flo
 
 void UGMCE_OrganicMovementCmp::OnMovementModeChanged_Implementation(EGMC_MovementMode PreviousMovementMode)
 {
-	if (PreviousMovementMode == MovementRagdoll)
+	if (GetMovementMode() == MovementRagdoll)
 	{
-		bResetMesh = true;
+		SetRagdollActive(true);
+	}
+	else if (PreviousMovementMode == MovementRagdoll)
+	{
+		SetRagdollActive(false);
 	}
 	
 	Super::OnMovementModeChanged_Implementation(PreviousMovementMode);
+}
+
+void UGMCE_OrganicMovementCmp::OnMovementModeChangedSimulated_Implementation(EGMC_MovementMode PreviousMovementMode)
+{
+	if (GetMovementMode() == MovementRagdoll)
+	{
+		SetRagdollActive(true);
+	}
+	else if (PreviousMovementMode == MovementRagdoll)
+	{
+		SetRagdollActive(false);
+	}
+	
+	Super::OnMovementModeChangedSimulated_Implementation(PreviousMovementMode);
+}
+
+float UGMCE_OrganicMovementCmp::GetInputAccelerationCustom_Implementation() const
+{
+	if (GetMovementMode() == MovementRagdoll)
+	{
+		return 0.f;
+	}
+	
+	return Super::GetInputAccelerationCustom_Implementation();
 }
 #pragma endregion
 
@@ -563,6 +598,13 @@ void UGMCE_OrganicMovementCmp::EnableRagdoll()
 void UGMCE_OrganicMovementCmp::DisableRagdoll()
 {
 	bWantsRagdoll = false;
+}
+
+void UGMCE_OrganicMovementCmp::SetRagdollActive(bool bActive)
+{
+	SkeletalMesh->SetAllBodiesBelowSimulatePhysics(FName(TEXT("pelvis")), bActive, true);
+	bFirstRagdollTick = bActive;
+	bResetMesh = !bActive;
 }
 
 
