@@ -170,27 +170,37 @@ private:
 #pragma region Trajectory History
 public:
 
+	/// Return the current set of historical trajectory samples. Coordinates are relative to current location and
+	/// rotation.
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
 	FGMCE_MovementSampleCollection GetMovementHistory(bool bOmitLatest) const;
 
+	/// Given the historical samples, predict the future trajectory a character will take. Coordinates are relative
+	/// to the origin point provided.
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
 	FGMCE_MovementSampleCollection PredictMovementFuture(const FTransform& FromOrigin, bool bIncludeHistory) const;
-	
+
+	/// Should historical trajectory samples be taken?
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory")
 	bool bTrajectoryEnabled { true };
 
+	/// Should the component automatically calculate a predicted trajectory and have it always available?
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory|Precalculations")
 	bool bPrecalculateFutureTrajectory { true };
-	
+
+	/// The maximum size of the trajectory sample history.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Movement Trajectory")
 	int32 MaxTrajectorySamples = { 200 };
 
+	/// The maximum time-window of trajectory samples that should be kept.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Movement Trajectory")
 	float TrajectoryHistorySeconds { 2.f };
-	
+
+	/// How many simulated samples should be generated for each second, when predicting trajectory?
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Movement Trajectory")
 	int32 TrajectorySimSampleRate = { 30 };
 
+	/// How many seconds of prediction should we generate when predicting trajectory?
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Movement Trajectory")
 	float TrajectorySimSeconds = { 1.f };
 
@@ -201,20 +211,29 @@ public:
 	
 protected:
 
+	/// Update the cached trajectory prediction. Called automatically if trajectory precalculation is enabled.
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
 	void UpdateTrajectoryPrediction();
-	
+
+	/// Obtain a movement sample representing our current pawn state.
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Movement Trajectory")
 	FGMCE_MovementSample GetMovementSampleFromCurrentState() const;
 
+	/// Add a new movement sample to the history, accumulating time and transform to
+	/// all previous samples.
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Movement Trajectory")
 	void AddNewMovementSample(const FGMCE_MovementSample& Sample);
 
+	/// Clear out old samples from the trajectory sample history.
 	void CullMovementSampleHistory(bool bIsNearlyZero, const FGMCE_MovementSample& LatestSample);
 
+	/// When trajectory is enabled, this is called to generate a new sample and add it to the history.
+	/// The default version generates a sample, adds it, and then calls Update Trajectory Prediction if
+	/// trajectory precalculation is enabled.
 	UFUNCTION(BlueprintNativeEvent, Category="Movement Trajectory")
 	void UpdateMovementSamples();
-	
+
+	/// Get our current acceleration and rotational velocity from our historical movement samples.
 	void GetCurrentAccelerationRotationVelocityFromHistory(FVector& OutAcceleration, FRotator& OutRotationVelocity) const;
 
 	
@@ -232,12 +251,17 @@ private:
 	// Ragdoll experiment
 #pragma region Ragdoll
 public:
+	/// Enables ragdolling. The character's actual position will be maintained (for the sake of everything staying
+	/// in sync), but velocity will be preserved as the skeletal mesh is ragdolled.
 	UFUNCTION(BlueprintCallable, Category="Ragdoll")
 	void EnableRagdoll();
 
+	/// Disables ragdolling. The skeletal mesh will snap back to the actual character position, and resume grounded
+	/// movement.
 	UFUNCTION(BlueprintCallable, Category="Ragdoll")
 	void DisableRagdoll();
 
+	/// Has the ragdoll state been enabled?
 	UFUNCTION(BlueprintPure, Category="Ragdoll")
 	bool RagdollActive() const { return bWantsRagdoll; }
 
