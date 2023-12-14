@@ -35,51 +35,56 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	// If we've finished ragdoll, we probably need to reset our mesh to where it should be.
 	if (bResetMesh)
 	{
 		SkeletalMesh->AttachToComponent(GetPawnOwner()->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
-		SkeletalMesh->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -GetRootCollisionHalfHeight(true)), FRotator(0.f, -90.f, 0.f));
+		SkeletalMesh->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -GetRootCollisionHalfHeight(true)), FRotator(0.f, -90.f, 0.f), false, nullptr, ETeleportType::ResetPhysics);
 		bResetMesh = false;
 	}
-	else if (bFirstRagdollTick)
+	else if (bFirstRagdollTick && GetMovementMode() == MovementRagdoll && !RagdollLinearVelocity.IsZero())
 	{
 		bFirstRagdollTick = false;
 		SkeletalMesh->SetAllBodiesBelowLinearVelocity(FName(TEXT("pelvis")), RagdollLinearVelocity, true);
 	}
-
-
-	// Store a timestamp when we last had input, for use as a grace period on input.
+	
 	if (bHadInput && !IsInputPresent())
 	{
 		InputStoppedAt = GetTime();
 	}
 	bHadInput = IsInputPresent();
 
-	// If pre-calculation of stop and pivot points is enabled, do that.
-	if (bPrecalculateDistanceMatches)
+	if (GetMovementMode() == EGMC_MovementMode::Grounded)
 	{
-		if (GetMovementMode() == EGMC_MovementMode::Grounded)
+		if (bPrecalculateDistanceMatches)
 		{
 			UpdateStopPrediction();
 			UpdatePivotPrediction();
 		}
-	}
 
-	// If we want to keep track of a trajectory, let's add appropriate samples.
-	if (bTrajectoryEnabled)
-	{
-		UpdateMovementSamples();
-
-		// ...and predict our future movement, if we're set to do that.
-		if (bPrecalculateFutureTrajectory)
+		if (bTrajectoryEnabled)
 		{
-			UpdateTrajectoryPrediction();
+			UpdateMovementSamples();
+			if (bPrecalculateFutureTrajectory)
+			{
+				UpdateTrajectoryPrediction();
+			}
 		}
 	}
+	else
+	{
+		bTrajectoryIsPivoting = false;
+		bTrajectoryIsStopping = false;
+		PredictedPivotPoint = FVector::ZeroVector;
+		PredictedStopPoint = FVector::ZeroVector;
 
 #if ENABLE_DRAW_DEBUG || WITH_EDITORONLY_DATA
-	if (IsTrajectoryDebugEnabled() && !IsNetMode(NM_DedicatedServer))
+		bDebugHadPreviousPivot = false;
+		bDebugHadPreviousStop = false;
+#endif
+    }
+
+#if ENABLE_DRAW_DEBUG || WITH_EDITORONLY_DATA
+	if (IsTrajectoryDebugEnabled() && !IsNetMode(NM_DedicatedServer) && GetMovementMode() == EGMC_MovementMode::Grounded)
 	{
 		const FVector ActorLocation = GetActorLocation_GMC();
 		if (bTrajectoryIsStopping || (bDebugHadPreviousStop && GetLinearVelocity_GMC().IsZero()))
