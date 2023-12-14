@@ -278,6 +278,7 @@ private:
 	bool bFirstRagdollTick { false };
 
 	FVector RagdollLinearVelocity { 0.f };
+	int32 BI_RagdollLinearVelocity { -1 };
 
 	FVector PreviousRelativeMeshLocation { 0.f };
 	FRotator PreviousRelativeMeshRotation { 0.f };
