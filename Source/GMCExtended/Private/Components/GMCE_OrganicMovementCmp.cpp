@@ -54,13 +54,15 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 	{
 		bFirstRagdollTick = false;
 
+#if ENABLE_DRAW_DEBUG || WITH_EDITORONLY_DATA
 		if (bDrawDebugPredictions)
 		{
 			const FVector InitialActor = GetLinearVelocity_GMC();
 			const FVector InitialPhysics = SkeletalMesh->GetBoneLinearVelocity(FName(TEXT("root")));
 			DrawDebugLine(GetWorld(), GetActorLocation_GMC(), GetActorLocation_GMC() + RagdollLinearVelocity, FColor::Red, false, 1.f, 0, 2.f);
 		}
-
+#endif
+		
 		UPrimitiveComponent* CollisionComponent = Cast<UPrimitiveComponent>(UpdatedComponent);
 		if (IsValid(CollisionComponent))
 		{
@@ -70,8 +72,8 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 		PreviousCollisionHalfHeight = GetRootCollisionHalfHeight(true);
 		SetRootCollisionHalfHeight(0.1f, false, false);
 
-		SkeletalMesh->SetAllBodiesBelowSimulatePhysics(FName(TEXT("pelvis")), true, true);
-		SkeletalMesh->SetAllBodiesBelowLinearVelocity(FName(TEXT("pelvis")), RagdollLinearVelocity, true);
+		SkeletalMesh->SetAllBodiesBelowSimulatePhysics(RagdollBoneName, true, true);
+		SkeletalMesh->SetAllBodiesBelowLinearVelocity(RagdollBoneName, RagdollLinearVelocity, true);
 		
 	}
 	
@@ -183,6 +185,7 @@ void UGMCE_OrganicMovementCmp::BindReplicationData_Implementation()
 		EGMC_InterpolationFunction::NearestNeighbour
 	);
 
+	// The initial linear velocity we should launch a ragdoll at.
 	BI_RagdollLinearVelocity = BindCompressedVector(
 		RagdollLinearVelocity,
 		EGMC_PredictionMode::ClientAuth_Input,
@@ -190,6 +193,34 @@ void UGMCE_OrganicMovementCmp::BindReplicationData_Implementation()
 		EGMC_SimulationMode::PeriodicAndOnChange_Output,
 		EGMC_InterpolationFunction::NearestNeighbour
 	);
+
+	// Should we replicate a ragdoll or not?
+	BI_ShouldReplicateRagdoll = BindBool(
+		bShouldReplicateRagdoll,
+		EGMC_PredictionMode::ServerAuth_Input_ServerValidated,
+		EGMC_CombineMode::CombineIfUnchanged,
+		EGMC_SimulationMode::PeriodicAndOnChange_Output,
+		EGMC_InterpolationFunction::NearestNeighbour
+	);
+
+	// Which bone to use as the base of ragdolling.
+	BI_RagdollBoneName = BindName(
+		RagdollBoneName,
+		EGMC_PredictionMode::ServerAuth_Input_ServerValidated,
+		EGMC_CombineMode::CombineIfUnchanged,
+		EGMC_SimulationMode::PeriodicAndOnChange_Output,
+		EGMC_InterpolationFunction::NearestNeighbour
+	);
+
+	// The current ragdoll 'goal' for the bone, if we're replicating
+	// the ragdolling.
+	BI_CurrentRagdollGoal = BindCompressedVector(
+		CurrentRagdollGoal,
+		EGMC_PredictionMode::ServerAuth_Input_ServerValidated,
+		EGMC_CombineMode::CombineIfUnchanged,
+		EGMC_SimulationMode::PeriodicAndOnChange_Output,
+		EGMC_InterpolationFunction::Linear
+	);	
 }
 
 void UGMCE_OrganicMovementCmp::MovementUpdate_Implementation(float DeltaSeconds)
@@ -264,9 +295,108 @@ void UGMCE_OrganicMovementCmp::OnMovementModeChangedSimulated_Implementation(EGM
 	Super::OnMovementModeChangedSimulated_Implementation(PreviousMovementMode);
 }
 
+void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
+{
+	if (GetMovementMode() == GetRagdollMode() && bShouldReplicateRagdoll)
+	{
+		const FVector BoneLocation = SkeletalMesh->GetBoneLocation(RagdollBoneName);
+		const FVector BoneVelocity = SkeletalMesh->GetBoneLinearVelocity(RagdollBoneName) * FVector(1.f, 1.f, 0.f);
+		
+		
+		if (GetOwnerRole() == ROLE_Authority)
+		{
+			// As the server, we need to be the authority.
+			
+			// Set our goal for clients to use.
+			CurrentRagdollGoal = BoneLocation;
+		}
+		else if (!CurrentRagdollGoal.IsZero() && !BoneVelocity.IsNearlyZero())
+		{
+			// We're a client, so figure out what needs to be done to shift the pelvis to match.
+			const FVector Delta = CurrentRagdollGoal - BoneLocation;
+
+			if (Delta.Size() > 2.f)
+			{
+				const FVector PelvisToComponent = SkeletalMesh->GetComponentLocation() - BoneLocation;
+				SkeletalMesh->MoveComponent(Delta + PelvisToComponent, SkeletalMesh->GetComponentQuat(), false, nullptr, MOVECOMP_NoFlags, ETeleportType::None);
+			}
+		}
+
+		if (!IsSimulatedProxy())
+		{
+			if (!BoneVelocity.IsNearlyZero())
+			{
+				// Find what the 'ground' is here. We do this on the affected client as well to ensure
+				// a smooth camera.
+				FVector NewLocation = BoneLocation;
+				NewLocation.Z = UpdatedComponent->GetComponentLocation().Z;
+
+				if (const FHitResult SweepResult =
+					SweepRootCollisionSingleByChannel(
+						FVector::DownVector,
+						FMath::Clamp(BasedMovement.GetMaxHeight(), MIN_ACTOR_BASE_TRACE_LENGTH, UE_BIG_NUMBER),
+						FVector::ZeroVector,
+						FQuat::Identity,
+						UpdatedComponent->GetCollisionObjectType()
+					); SweepResult.bBlockingHit)
+				{
+					NewLocation.Z = SweepResult.Location.Z;
+				}
+
+				if (NewLocation.Z - BoneLocation.Z > PreviousCollisionHalfHeight)
+				{
+					NewLocation.Z = BoneLocation.Z + PreviousCollisionHalfHeight;
+				}
+				
+				// Move our character to stay with the pelvis. We do this on the client, too, to make the
+				// overall effect smooth.
+				const FVector Delta = NewLocation - UpdatedComponent->GetComponentLocation();
+
+				if (Delta.Size() > 0.5f)
+				{
+					FHitResult GroundResult;
+					SafeMoveUpdatedComponent(Delta, UpdatedComponent->GetComponentQuat(), false, GroundResult);
+				}
+			}
+			else if (GetOwnerRole() == ROLE_Authority)
+			{
+				FVector NewLocation = UpdatedComponent->GetComponentLocation();
+				NewLocation.Z = BoneLocation.Z;
+				
+				FHitResult GroundHit;
+				const FVector LineTraceStart = NewLocation;
+				const FVector LineTraceEnd = LineTraceStart + FVector::DownVector * 50.f;
+				FCollisionQueryParams CollisionQueryParams(NAME_None, false, GetOwner());
+				CollisionQueryParams.AddIgnoredActors(UpdatedPrimitive->GetMoveIgnoreActors());
+				CollisionQueryParams.AddIgnoredComponents(UpdatedPrimitive->GetMoveIgnoreComponents());
+				const auto& CollisionResponseParams = UpdatedComponent->GetCollisionResponseToChannels();
+				if (const auto& World = GetWorld())
+				{
+					World->LineTraceSingleByChannel(
+					  GroundHit,
+					  LineTraceStart,
+					  LineTraceEnd,
+					  UpdatedComponent->GetCollisionObjectType(),
+					  CollisionQueryParams,
+					  CollisionResponseParams
+					);
+				}
+
+				if (GroundHit.bBlockingHit)
+				{
+					NewLocation.Z = GroundHit.Location.Z + PreviousCollisionHalfHeight;
+					SafeMoveUpdatedComponent(NewLocation - UpdatedComponent->GetComponentLocation(), UpdatedComponent->GetComponentQuat(), false, GroundHit);
+				}
+			}
+		}
+	}
+	
+	Super::PhysicsCustom_Implementation(DeltaSeconds);
+}
+
 float UGMCE_OrganicMovementCmp::GetInputAccelerationCustom_Implementation() const
 {
-	if (GetMovementMode() == MovementRagdoll)
+	if (GetMovementMode() == GetRagdollMode())
 	{
 		return 0.f;
 	}
@@ -647,7 +777,7 @@ FVector UGMCE_OrganicMovementCmp::GetRagdollInitialVelocity_Implementation()
 
 void UGMCE_OrganicMovementCmp::SetRagdollActive(bool bActive)
 {
-	if (IsNetMode(NM_DedicatedServer)) return;
+	if (IsNetMode(NM_DedicatedServer) && !bShouldReplicateRagdoll) return;
 	
 	if (bActive)
 	{

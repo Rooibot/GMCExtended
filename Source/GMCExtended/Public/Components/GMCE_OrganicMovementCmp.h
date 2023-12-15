@@ -8,8 +8,6 @@
 #include "Support/GMCEMovementSample.h"
 #include "GMCE_OrganicMovementCmp.generated.h"
 
-static EGMC_MovementMode MovementRagdoll = EGMC_MovementMode::Custom1;
-
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent, DisplayName="GMCExtended Organic Movement Component"))
 class GMCEXTENDED_API UGMCE_OrganicMovementCmp : public UGMC_OrganicMovementCmp
 {
@@ -36,6 +34,7 @@ public:
 	virtual void OnMovementModeChanged_Implementation(EGMC_MovementMode PreviousMovementMode) override;
 	virtual void OnMovementModeChangedSimulated_Implementation(EGMC_MovementMode PreviousMovementMode) override;
 
+	virtual void PhysicsCustom_Implementation(float DeltaSeconds) override;
 	virtual float GetInputAccelerationCustom_Implementation() const override;
 	
 	// Utilities
@@ -271,10 +270,26 @@ public:
 	/// on the owning client. Default implementation just returns the value of `GetLinearVelocity_GMC`.
 	UFUNCTION(BlueprintNativeEvent, Category="Ragdoll")
 	FVector GetRagdollInitialVelocity();
+
+	/// If true, will ensure ragdolls land in the same place on all clients and that the character is moved there.
+	/// If false, ragdolls will be entirely local. Should be true if you intend to have the character get up afterwards,
+	/// false if you want to just use ragdoll animations on death and will be respawning afterwards.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ragdoll")
+	bool bShouldReplicateRagdoll { true };
+
+	/// The bone to use for ragdolling.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Ragdoll")
+	FName RagdollBoneName = FName(TEXT("pelvis"));	
 	
 private:
 
 	void SetRagdollActive(bool bActive);
+
+	int32 BI_ShouldReplicateRagdoll { -1 };
+	int32 BI_RagdollBoneName { -1 };
+
+	FVector CurrentRagdollGoal { 0.f };
+	int32 BI_CurrentRagdollGoal { -1 };
 	
 	bool bWantsRagdoll { false };
 	int32 BI_WantsRagdoll { -1 };
