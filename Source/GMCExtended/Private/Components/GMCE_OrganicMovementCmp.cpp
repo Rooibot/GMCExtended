@@ -226,7 +226,7 @@ bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_Flo
 		// We may need to either enable or disable ragdoll mode.
 		if (bWantsRagdoll && GetMovementMode() == EGMC_MovementMode::Grounded)
 		{
-			RagdollLinearVelocity = GetLinearVelocity_GMC();
+			RagdollLinearVelocity = GetRagdollInitialVelocity();
 			HaltMovement();
 		}
 		SetMovementMode(bWantsRagdoll ? GetRagdollMode() : EGMC_MovementMode::Grounded);
@@ -638,6 +638,11 @@ void UGMCE_OrganicMovementCmp::EnableRagdoll()
 void UGMCE_OrganicMovementCmp::DisableRagdoll()
 {
 	bWantsRagdoll = false;
+}
+
+FVector UGMCE_OrganicMovementCmp::GetRagdollInitialVelocity_Implementation()
+{
+	return GetLinearVelocity_GMC();
 }
 
 void UGMCE_OrganicMovementCmp::SetRagdollActive(bool bActive)

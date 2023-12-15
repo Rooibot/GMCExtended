@@ -266,6 +266,11 @@ public:
 	bool RagdollActive() const { return bWantsRagdoll; }
 
 	virtual EGMC_MovementMode GetRagdollMode() const { return EGMC_MovementMode::Custom1; }
+
+	/// Can be overridden to provide a custom value for the initial linear velocity for a ragdoll. Will be called
+	/// on the owning client. Default implementation just returns the value of `GetLinearVelocity_GMC`.
+	UFUNCTION(BlueprintNativeEvent, Category="Ragdoll")
+	FVector GetRagdollInitialVelocity();
 	
 private:
 
