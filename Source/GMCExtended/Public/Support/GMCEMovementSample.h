@@ -148,7 +148,8 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 
 	void DrawDebug(const UWorld* World, const FTransform& FromOrigin = FTransform::Identity, const FColor& Color = FColor::Purple) const;
 	
-	explicit operator FTrajectorySample() const
+	// ReSharper disable once CppNonExplicitConversionOperator
+	operator FTrajectorySample() const
 	{
 		FTrajectorySample Result;
 		
@@ -172,7 +173,8 @@ struct GMCEXTENDED_API FGMCE_MovementSampleCollection
 	void DrawDebug(const UWorld* World, const FTransform& FromOrigin, const FColor& PastColor = FColor::Blue,
 		const FColor& FutureColor = FColor::Red) const;
 	
-	explicit operator FTrajectorySampleRange() const
+	// ReSharper disable once CppNonExplicitConversionOperator
+	operator FTrajectorySampleRange() const
 	{
 		FTrajectorySampleRange Result;
 		Result.Samples.Reserve(Samples.Num());

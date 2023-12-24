@@ -3,6 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GMCEMovementSample.h"
+#include "Animation/MotionTrajectoryTypes.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GMCE_UtilityLibrary.generated.h"
 
@@ -29,6 +31,10 @@ public:
 	/// defined by their cross product.
 	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
 	static float GetAngleDifference(const FVector& A, const FVector& B);
-	
 
+	/// Converts a GMCEx Movement Sample into an Epic Trajectory Sample.
+	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
+    static FTrajectorySample ConvertMovementSampleToTrajectorySample(const FGMCE_MovementSample& MovementSample);
+
+	static FTrajectorySampleRange ConvertMovementSampleCollectionToTrajectorySampleRange(const FGMCE_MovementSampleCollection& MovementSampleCollection);
 };

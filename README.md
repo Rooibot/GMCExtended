@@ -37,18 +37,17 @@ If `Draw Debug Predictions` is enabled with precalculations enabled, the compone
 
 If `Trajectory Enabled` is true, the component will keep historical samples; if `Precalculate Future Trajectory` is also true, the component will keep a constantly-updated version of the predicted trajectory available in `Predicted Trajectory`.
 
-There's also an `FGMCE_MovementSample` which serves as the data storage container for the trajectory, and which can be cast into a stock Unreal `FTrajectorySample` as-needed.
+There's also an `FGMCE_MovementSample` which serves as the data storage container for the trajectory, and which can be cast into a stock Unreal `FTrajectorySample` as-needed, as well as an `FGMCE_MovementSampleCollection` which can similarly be cast into an `FTrajectorySampleRange`. For blueprint use, there are also two blueprint functions provided to turn the GMCEx structures into standard Epic Motion Trajectory ones.
 
 If `Draw Debug Predictions` is enabled with precalculations enabled, the component will draw a pathway showing historical movement and predicted trajectory.
 
 ### Ragdolling
 
-This component uses the GMC `Custom1` movement mode for ragdolling logic; `Enable Ragdoll` and `Disable Ragdoll` will toggle the character into ragdoll
-mode or back to normal grounded movement.
+***Note:** This functionality was hastily written and could definitely be improved on. Maybe by you! Feel free to fork, modify, and make a merge request!*
 
-For purposes of network sync, the character's position will remain unchanged when ragdolling; the skeletal mesh will be thrown (preserving velocity) as
-a ragdoll, but upon disabling ragdoll mode, the mesh will snap back to the
-position it was in at the time of ragdoll.
+This component uses the GMC `Custom1` movement mode for ragdolling logic; `Enable Ragdoll` and `Disable Ragdoll` will toggle the character into ragdoll mode or back to normal grounded movement.
+
+For purposes of network sync, the character's position will remain unchanged when ragdolling; the skeletal mesh will be thrown (preserving velocity) as a ragdoll, but upon disabling ragdoll mode, the mesh will snap back to the position it was in at the time of ragdoll.
 
 (Since ragdolling is usually used on death, before respawning a character, this didn't seem a limitation worth spending a ton of time to solve.)
 
