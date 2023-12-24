@@ -34,7 +34,9 @@ public:
 
 	/// Converts a GMCEx Movement Sample into an Epic Trajectory Sample.
 	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
-    static FTrajectorySample ConvertMovementSampleToTrajectorySample(const FGMCE_MovementSample& MovementSample);
+	static FTrajectorySample ConvertMovementSampleToTrajectorySample(const FGMCE_MovementSample& MovementSample);
 
+	/// Converts a GMCEx Movement Sample Collection into an Epic Trajectory Sample Range.
+	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
 	static FTrajectorySampleRange ConvertMovementSampleCollectionToTrajectorySampleRange(const FGMCE_MovementSampleCollection& MovementSampleCollection);
 };
