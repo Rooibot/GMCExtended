@@ -3,13 +3,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GMCE_CoreComponent.h"
 #include "GMCOrganicMovementComponent.h"
 #include "Containers/RingBuffer.h"
 #include "Support/GMCEMovementSample.h"
 #include "GMCE_OrganicMovementCmp.generated.h"
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent, DisplayName="GMCExtended Organic Movement Component"))
-class GMCEXTENDED_API UGMCE_OrganicMovementCmp : public UGMC_OrganicMovementCmp
+class GMCEXTENDED_API UGMCE_OrganicMovementCmp : public UGMCE_CoreComponent
 {
 	GENERATED_BODY()
 
@@ -149,11 +150,9 @@ private:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Movement Trajectory", meta=(AllowPrivateAccess=true))
 	FVector PredictedPivotPoint { 0.f };
 
-#if WITH_EDITORONLY_DATA
 	/// Should we start with trajectory debug enabled? Only valid in editor.
 	UPROPERTY(EditDefaultsOnly, Category="Movement Trajectory", meta=(AllowPrivateAccess=true))
 	bool bDrawDebugPredictions { false };
-#endif
 	
 #if ENABLE_DRAW_DEBUG || WITH_EDITORONLY_DATA
 	/// For debug rendering
