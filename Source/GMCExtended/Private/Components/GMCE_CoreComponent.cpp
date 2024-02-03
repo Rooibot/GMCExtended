@@ -55,18 +55,33 @@ void UGMCE_CoreComponent::BindReplicationData_Implementation()
 {
 	Super::BindReplicationData_Implementation();
 
-	// Make sure all our components get to register whatever variables they want.
-	for (UActorComponent* Component : GetGMCPawnOwner()->GetComponents())
+	// HYPOTHETICALLY this should always return a value. However, if someone has not
+	// changed their pawn to descend from AGMC_Pawn yet, we will get null.
+	const AActor *Owner = GetGMCPawnOwner();
+	if (!Owner)
 	{
-		if (Component->Implements<UGMCE_SharedVariableComponent>())
-		{
-			IGMCE_SharedVariableComponent::Execute_OnBindSharedVariables(Component, this);
-		}
+		// In the case that they haven't yet set up a GMC Pawn, let's... y'know, at least
+		// not CRASH. We don't *really* need the GMC variant of a pawn, but still, let's
+		// at least warn them.
+		Owner = GetPawnOwner();
+		UE_LOG(LogTemp, Warning, TEXT("Warning: %s does not descend from AGMC_Pawn"), *Owner->GetClass()->GetName())
 	}
 
-	if (GetGMCPawnOwner()->Implements<UGMCE_SharedVariableComponent>())
+	if (Owner)
 	{
-		IGMCE_SharedVariableComponent::Execute_OnBindSharedVariables(GetGMCPawnOwner(), this);
+		// Make sure all our components get to register whatever variables they want.
+		for (UActorComponent* Component : GetGMCPawnOwner()->GetComponents())
+		{
+			if (Component->Implements<UGMCE_SharedVariableComponent>())
+			{
+				IGMCE_SharedVariableComponent::Execute_OnBindSharedVariables(Component, this);
+			}
+		}
+
+		if (Owner->Implements<UGMCE_SharedVariableComponent>())
+		{
+			IGMCE_SharedVariableComponent::Execute_OnBindSharedVariables(GetGMCPawnOwner(), this);
+		}
 	}
 
 	// Sort and bind each variable type.
