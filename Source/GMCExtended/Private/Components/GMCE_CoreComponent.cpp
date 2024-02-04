@@ -55,33 +55,29 @@ void UGMCE_CoreComponent::BindReplicationData_Implementation()
 {
 	Super::BindReplicationData_Implementation();
 
-	// HYPOTHETICALLY this should always return a value. However, if someone has not
-	// changed their pawn to descend from AGMC_Pawn yet, we will get null.
-	const AActor *Owner = GetGMCPawnOwner();
+	// For the use case where the UpdatedComponent is being set later in the initialization,
+	// UPawnMovementComponent's GetPawnOwner() will return null... which means GetGMCPawnOwner()
+	// will as well. Attempt to get our owner more generically.
+	const AActor *Owner = GetOwner();
 	if (!Owner)
 	{
-		// In the case that they haven't yet set up a GMC Pawn, let's... y'know, at least
-		// not CRASH. We don't *really* need the GMC variant of a pawn, but still, let's
-		// at least warn them.
-		Owner = GetPawnOwner();
-		UE_LOG(LogTemp, Warning, TEXT("Warning: %s does not descend from AGMC_Pawn"), *Owner->GetClass()->GetName())
+		// We're not going to be able to do anything, so warn and exit.
+		UE_LOG(LogTemp, Warning, TEXT("Warning: %s has no valid owner."), *GetName())
+		return;
 	}
 
-	if (Owner)
+	// Make sure all our components get to register whatever variables they want.
+	for (UActorComponent* Component : Owner->GetComponents())
 	{
-		// Make sure all our components get to register whatever variables they want.
-		for (UActorComponent* Component : GetGMCPawnOwner()->GetComponents())
+		if (Component->Implements<UGMCE_SharedVariableComponent>())
 		{
-			if (Component->Implements<UGMCE_SharedVariableComponent>())
-			{
-				IGMCE_SharedVariableComponent::Execute_OnBindSharedVariables(Component, this);
-			}
+			IGMCE_SharedVariableComponent::Execute_OnBindSharedVariables(Component, this);
 		}
+	}
 
-		if (Owner->Implements<UGMCE_SharedVariableComponent>())
-		{
-			IGMCE_SharedVariableComponent::Execute_OnBindSharedVariables(GetGMCPawnOwner(), this);
-		}
+	if (Owner->Implements<UGMCE_SharedVariableComponent>())
+	{
+		IGMCE_SharedVariableComponent::Execute_OnBindSharedVariables(GetGMCPawnOwner(), this);
 	}
 
 	// Sort and bind each variable type.
