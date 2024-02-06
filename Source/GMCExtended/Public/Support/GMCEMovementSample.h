@@ -14,6 +14,7 @@
 
 #include "CoreMinimal.h"
 #include "Animation/MotionTrajectoryTypes.h"
+#include "PoseSearch/PoseSearchTrajectoryTypes.h"
 #include "GMCEMovementSample.generated.h"
 
 USTRUCT(BlueprintType)
@@ -159,7 +160,18 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 
 		return Result;
 	}
-	
+
+	// ReSharper disable once CppNonExplicitConversionOperator
+	operator FPoseSearchQueryTrajectorySample() const
+	{
+		FPoseSearchQueryTrajectorySample Result; 
+
+		Result.AccumulatedSeconds = AccumulatedSeconds;
+		Result.Position = RelativeTransform.GetTranslation();  
+		Result.Facing = RelativeTransform.GetRotation();
+
+		return Result;
+	}
 };
 
 USTRUCT(BlueprintType)
@@ -183,6 +195,20 @@ struct GMCEXTENDED_API FGMCE_MovementSampleCollection
 		{
 			// Implicit conversion gives us an FTrajectorySample
 			Result.Samples.Emplace(static_cast<FTrajectorySample>(Sample));
+		}
+
+		return Result;
+	}
+
+	// ReSharper disable once CppNonExplicitConversionOperator
+	operator FPoseSearchQueryTrajectory() const
+	{
+		FPoseSearchQueryTrajectory Result;
+		Result.Samples.Reserve(Samples.Num());
+
+		for (const FGMCE_MovementSample& Sample : Samples)
+		{
+			Result.Samples.Emplace(static_cast<FPoseSearchQueryTrajectorySample>(Sample));
 		}
 
 		return Result;
