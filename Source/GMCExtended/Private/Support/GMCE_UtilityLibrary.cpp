@@ -55,3 +55,17 @@ FTrajectorySampleRange UGMCE_UtilityLibrary::ConvertMovementSampleCollectionToTr
 	// Just use the FGMCE_MovementSampleRange's own conversion operator.
 	return static_cast<FTrajectorySampleRange>(MovementSampleCollection);
 }
+
+FPoseSearchQueryTrajectorySample UGMCE_UtilityLibrary::ConvertMovementSampleCollectionToPoseSearchQueryTrajectorySample(
+	const FGMCE_MovementSample& MovementSample)
+{
+	// Just use the FPoseSearchQueryTrajectorySample's own conversion operator.
+	return static_cast<FPoseSearchQueryTrajectorySample>(MovementSample);
+}
+
+FPoseSearchQueryTrajectory UGMCE_UtilityLibrary::ConvertMovementSampleCollectionToPoseSearchQueryTrajectory(
+	const FGMCE_MovementSampleCollection& MovementSampleCollection)
+{
+	// Just use the FPoseSearchQueryTrajectory's own conversion operator.
+	return static_cast<FPoseSearchQueryTrajectory>(MovementSampleCollection);
+}

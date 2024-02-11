@@ -25,6 +25,10 @@
 		{
 			"Name": "GMC",
 			"Enabled": true
+		},
+		{
+			"Name": "PoseSearch",
+			"Enabled": true
 		}
 	]
 }

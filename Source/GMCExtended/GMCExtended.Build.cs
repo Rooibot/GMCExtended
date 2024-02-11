@@ -27,7 +27,7 @@ public class GMCExtended : ModuleRules
 			{
 				"Core",
 				"GMCCore",
-				"GameplayTags",
+				"GameplayTags", "PoseSearch"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);

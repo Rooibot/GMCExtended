@@ -39,4 +39,12 @@ public:
 	/// Converts a GMCEx Movement Sample Collection into an Epic Trajectory Sample Range.
 	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
 	static FTrajectorySampleRange ConvertMovementSampleCollectionToTrajectorySampleRange(const FGMCE_MovementSampleCollection& MovementSampleCollection);
+
+	/// Converts a GMCEx Movement Sample into an Epic Pose Search Query Trajectory Sample.
+	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
+	static FPoseSearchQueryTrajectorySample ConvertMovementSampleCollectionToPoseSearchQueryTrajectorySample(const FGMCE_MovementSample& MovementSample);
+	
+	/// Converts a GMCEx Movement Sample Collection into an Epic Pose Search Query Trajectory.
+	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
+	static FPoseSearchQueryTrajectory ConvertMovementSampleCollectionToPoseSearchQueryTrajectory(const FGMCE_MovementSampleCollection& MovementSampleCollection);
 };
