@@ -43,18 +43,21 @@ float UGMCE_UtilityLibrary::GetAngleDifference(const FVector& A, const FVector& 
 	return (180.0)/UE_DOUBLE_PI * FMath::Acos(DotProduct);	
 }
 
+// 
 FTrajectorySample UGMCE_UtilityLibrary::ConvertMovementSampleToTrajectorySample(const FGMCE_MovementSample& Sample)
 {
 	// Just use the FGMCE_MovementSample's own conversion operator.
 	return static_cast<FTrajectorySample>(Sample);
 }
 
+PRAGMA_DISABLE_DEPRECATION_WARNINGS
 FTrajectorySampleRange UGMCE_UtilityLibrary::ConvertMovementSampleCollectionToTrajectorySampleRange(
 	const FGMCE_MovementSampleCollection& MovementSampleCollection)
 {
 	// Just use the FGMCE_MovementSampleRange's own conversion operator.
 	return static_cast<FTrajectorySampleRange>(MovementSampleCollection);
 }
+PRAGMA_ENABLE_DEPRECATION_WARNINGS
 
 FPoseSearchQueryTrajectorySample UGMCE_UtilityLibrary::ConvertMovementSampleCollectionToPoseSearchQueryTrajectorySample(
 	const FGMCE_MovementSample& MovementSample)

@@ -148,7 +148,7 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 	}
 
 	void DrawDebug(const UWorld* World, const FTransform& FromOrigin = FTransform::Identity, const FColor& Color = FColor::Purple) const;
-	
+
 	// ReSharper disable once CppNonExplicitConversionOperator
 	operator FTrajectorySample() const
 	{
@@ -184,6 +184,9 @@ struct GMCEXTENDED_API FGMCE_MovementSampleCollection
 
 	void DrawDebug(const UWorld* World, const FTransform& FromOrigin, const FColor& PastColor = FColor::Blue,
 		const FColor& FutureColor = FColor::Red) const;
+
+	// Disable the deprecation warnings for 5.3+ so we can still use the older struct if people need it.
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	
 	// ReSharper disable once CppNonExplicitConversionOperator
 	operator FTrajectorySampleRange() const
@@ -213,4 +216,8 @@ struct GMCEXTENDED_API FGMCE_MovementSampleCollection
 
 		return Result;
 	}
+
+	// Re-enable deprecation warnings
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
+	
 };

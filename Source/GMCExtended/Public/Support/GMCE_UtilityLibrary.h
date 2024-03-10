@@ -36,9 +36,11 @@ public:
 	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
 	static FTrajectorySample ConvertMovementSampleToTrajectorySample(const FGMCE_MovementSample& MovementSample);
 
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS	
 	/// Converts a GMCEx Movement Sample Collection into an Epic Trajectory Sample Range.
 	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
 	static FTrajectorySampleRange ConvertMovementSampleCollectionToTrajectorySampleRange(const FGMCE_MovementSampleCollection& MovementSampleCollection);
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 
 	/// Converts a GMCEx Movement Sample into an Epic Pose Search Query Trajectory Sample.
 	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
