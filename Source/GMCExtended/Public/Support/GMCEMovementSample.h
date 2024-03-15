@@ -187,7 +187,7 @@ struct GMCEXTENDED_API FGMCE_MovementSampleCollection
 
 	// Disable the deprecation warnings for 5.3+ so we can still use the older struct if people need it.
 	PRAGMA_DISABLE_DEPRECATION_WARNINGS
-	
+
 	// ReSharper disable once CppNonExplicitConversionOperator
 	operator FTrajectorySampleRange() const
 	{

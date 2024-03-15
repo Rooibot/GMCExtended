@@ -539,7 +539,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	const float TimePerSample = 1.f / TrajectorySimSampleRate;
 	const int32 TotalSimulatedSamples = FMath::TruncToInt32(TrajectorySimSampleRate * TrajectorySimSeconds);
 
-	const int32 TotalCollectionSize = TotalSimulatedSamples + 1 + bIncludeHistory ? MovementSamples.Num() : 0;
+	const int32 TotalCollectionSize = TotalSimulatedSamples + 1 + (bIncludeHistory ? MovementSamples.Num() : 0);
 	
 	FGMCE_MovementSample SimulatedSample = LastMovementSample;
 	FGMCE_MovementSampleCollection Predictions;

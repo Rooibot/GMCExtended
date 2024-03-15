@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 using UnrealBuildTool;
+using System;
+using System.IO;
 
 public class GMCExtended : ModuleRules
 {
@@ -11,6 +13,9 @@ public class GMCExtended : ModuleRules
 		PublicIncludePaths.AddRange(
 			new string[] {
 				// ... add public include paths required here ...
+				Path.Combine(ModuleDirectory, "Public/Components"),
+				Path.Combine(ModuleDirectory, "Public/Interfaces"),
+				Path.Combine(ModuleDirectory, "Public/Support")
 			}
 			);
 				
@@ -18,6 +23,9 @@ public class GMCExtended : ModuleRules
 		PrivateIncludePaths.AddRange(
 			new string[] {
 				// ... add other private include paths required here ...
+				Path.Combine(ModuleDirectory, "Private/Components"),
+				Path.Combine(ModuleDirectory, "Private/Interfaces"),
+				Path.Combine(ModuleDirectory, "Private/Support")
 			}
 			);
 			
@@ -27,7 +35,8 @@ public class GMCExtended : ModuleRules
 			{
 				"Core",
 				"GMCCore",
-				"GameplayTags", "PoseSearch"
+				"GameplayTags", "PoseSearch",
+				"StructUtils"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
