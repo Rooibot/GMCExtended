@@ -178,6 +178,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
 	FGMCE_MovementSampleCollection PredictMovementFuture(const FTransform& FromOrigin, bool bIncludeHistory) const;
 
+	/// Update the cached trajectory prediction. Called automatically if trajectory precalculation is enabled.
+	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
+	virtual void UpdateTrajectoryPrediction();
+	
 	/// Should historical trajectory samples be taken?
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory")
 	bool bTrajectoryEnabled { true };
@@ -208,10 +212,6 @@ public:
 	FGMCE_MovementSampleCollection PredictedTrajectory;
 	
 protected:
-
-	/// Update the cached trajectory prediction. Called automatically if trajectory precalculation is enabled.
-	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
-	void UpdateTrajectoryPrediction();
 
 	/// Obtain a movement sample representing our current pawn state.
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Movement Trajectory")
