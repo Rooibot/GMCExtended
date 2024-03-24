@@ -88,8 +88,8 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 	{
 		if (bPrecalculateDistanceMatches)
 		{
-			UpdateStopPrediction();
-			UpdatePivotPrediction();
+			UpdateStopPrediction(DeltaTime);
+			UpdatePivotPrediction(DeltaTime);
 		}
 
 		if (bTrajectoryEnabled)
@@ -436,17 +436,17 @@ void UGMCE_OrganicMovementCmp::UpdateCalculatedEffectiveAcceleration()
 	CalculatedEffectiveAcceleration = -DeltaV / (SyncedTime - LastMove.MetaData.Timestamp);
 }
 
-void UGMCE_OrganicMovementCmp::UpdateStopPrediction()
+void UGMCE_OrganicMovementCmp::UpdateStopPrediction(float DeltaTime)
 {
-	PredictedStopPoint = PredictGroundedStopLocation(GetLinearVelocity_GMC(), GetBrakingDeceleration(), GroundFriction);
+	PredictedStopPoint = PredictGroundedStopLocation(GetLinearVelocity_GMC(), GetBrakingDeceleration(), GroundFriction, DeltaTime);
 	bTrajectoryIsStopping = !PredictedStopPoint.IsZero() && !IsInputPresent();	
 }
 
-void UGMCE_OrganicMovementCmp::UpdatePivotPrediction()
+void UGMCE_OrganicMovementCmp::UpdatePivotPrediction(float DeltaTime)
 {
 	const FRotator Rotation = GetActorRotation_GMC();
 	
-	PredictedPivotPoint = PredictGroundedPivotLocation(GetCurrentEffectiveAcceleration(), GetLinearVelocity_GMC(), Rotation, GroundFriction);
+	PredictedPivotPoint = PredictGroundedPivotLocation(GetCurrentEffectiveAcceleration(), GetLinearVelocity_GMC(), Rotation, GroundFriction, DeltaTime);
 	bTrajectoryIsPivoting = !PredictedPivotPoint.IsZero() && IsInputPresent() && DoInputAndVelocityDiffer();	
 }
 
@@ -463,23 +463,28 @@ bool UGMCE_OrganicMovementCmp::IsPivotPredicted(FVector& OutPivotPrediction) con
 }
 
 FVector UGMCE_OrganicMovementCmp::PredictGroundedStopLocation(const FVector& CurrentVelocity, float BrakingDeceleration,
-	float Friction)
+	float Friction, float DeltaTime)
 {
+	if (CurrentVelocity.IsZero())
+	{
+		return FVector::ZeroVector;
+	}
+	
 	FVector Result = FVector::ZeroVector;
 	
 	const FVector GroundedVelocity = CurrentVelocity * FVector(1.f, 1.f, 0.f);
 	const FVector GroundedDirection = GroundedVelocity.GetSafeNormal();
-
+	
 	if (const float RealBrakingDeceleration = BrakingDeceleration * Friction; RealBrakingDeceleration > 0.f)
 	{
 		Result = GroundedDirection * (GroundedVelocity.SizeSquared() / (2 * RealBrakingDeceleration));
 	}
-
+	
 	return Result;
 }
 
 FVector UGMCE_OrganicMovementCmp::PredictGroundedPivotLocation(const FVector& CurrentAcceleration,
-	const FVector& CurrentVelocity, const FRotator& CurrentRotation, float Friction)
+	const FVector& CurrentVelocity, const FRotator& CurrentRotation, float Friction, float DeltaTime)
 {
 	FVector Result = FVector::ZeroVector;
 	const FVector EffectiveAcceleration = CurrentAcceleration;

@@ -93,12 +93,12 @@ public:
 	/// Calls the stop point prediction logic; the result will be cached in the PredictedStopPoint and
 	/// TrajectoryIsStopping properties.
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
-	void UpdateStopPrediction();
+	void UpdateStopPrediction(float DeltaTime);
 
 	/// Calls the pivot point prediction logic; the result will be cached in the PredictedPivotPoint and
 	/// TrajectoryIsPivoting properties.
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
-	void UpdatePivotPrediction();
+	void UpdatePivotPrediction(float DeltaTime);
 
 	/// Check whether a stop is predicted, and store the prediction in OutStopPrediction. Only valid
 	/// if UpdateStopPrediction has been called, or PrecalculateDistanceMatches is true.
@@ -116,10 +116,10 @@ public:
 	bool bPrecalculateDistanceMatches { true };
 
 	UFUNCTION(BlueprintPure, Category="RooiCore Trajectory Matching", meta=(ToolTip="Returns a predicted point relative to the actor where they'll come to a stop.", BlueprintThreadSafe))
-	static FVector PredictGroundedStopLocation(const FVector& CurrentVelocity, float BrakingDeceleration, float Friction);
+	static FVector PredictGroundedStopLocation(const FVector& CurrentVelocity, float BrakingDeceleration, float Friction, float DeltaTime);
 
 	UFUNCTION(BlueprintPure, Category="RooiCore Trajectory Matching", meta=(ToolTip="Returns a predicted point relative to the actor where they'll finish a pivot.", BlueprintThreadSafe))
-	static FVector PredictGroundedPivotLocation(const FVector& CurrentAcceleration, const FVector& CurrentVelocity, const FRotator& CurrentRotation, float Friction);
+	static FVector PredictGroundedPivotLocation(const FVector& CurrentAcceleration, const FVector& CurrentVelocity, const FRotator& CurrentRotation, float Friction, float DeltaTime);
 
 
 private:
