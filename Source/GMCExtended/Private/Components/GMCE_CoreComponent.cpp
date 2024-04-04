@@ -1,7 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
-
-
-#include "Components/GMCE_CoreComponent.h"
+﻿#include "Components/GMCE_CoreComponent.h"
 
 #include "GMCPawn.h"
 #include "Interfaces/GMCE_SharedVariableComponent.h"

@@ -1,8 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
-#include "Components/GMCE_OrganicMovementCmp.h"
+﻿#include "Components/GMCE_OrganicMovementCmp.h"
 
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -221,7 +217,12 @@ void UGMCE_OrganicMovementCmp::BindReplicationData_Implementation()
 		EGMC_CombineMode::CombineIfUnchanged,
 		EGMC_SimulationMode::PeriodicAndOnChange_Output,
 		EGMC_InterpolationFunction::Linear
-	);	
+	);
+
+	if (OnBindReplicationData.IsBound())
+	{
+		OnBindReplicationData.Execute();
+	}
 }
 
 void UGMCE_OrganicMovementCmp::MovementUpdate_Implementation(float DeltaSeconds)
@@ -404,6 +405,103 @@ float UGMCE_OrganicMovementCmp::GetInputAccelerationCustom_Implementation() cons
 	
 	return Super::GetInputAccelerationCustom_Implementation();
 }
+
+void UGMCE_OrganicMovementCmp::MontageUpdate(float DeltaSeconds)
+{
+  bHasRootMotion = false;
+  
+  if (!SkeletalMesh || !MontageTracker.HasActiveMontage())
+  {
+    MontageTracker.ClearActiveMontage();
+    RootMotionParams.Clear();
+    return;
+  }
+
+  if (MontageTracker.bMontagePaused)
+  {
+    return;
+  }
+  
+  FGMC_AnimMontageInstance MontageInstance{MontageTracker.Montage, MontageTracker.MontagePosition, MontageTracker.MontagePlayRate, true};
+  
+  bool bFinishedBlendIn = false;
+  bool bStartedBlendOut = false;
+  
+  TArray<const FAnimNotifyEvent*> MontageNotifyBeginEvents{};
+  TArray<const FAnimNotifyEvent*> MontageNotifyEndEvents{};
+  
+  {
+    gmc_ck(MontageTracker.HasActiveMontage())
+    gmc_ck(!MontageTracker.bMontageEnded)
+    gmc_ck(!MontageTracker.bMontagePaused)
+  
+    MontageTracker.bMontageEnded = MontageInstance.Advance(
+      DeltaSeconds,
+      RootMotionParams,
+      bFinishedBlendIn,
+      bStartedBlendOut,
+      MontageNotifyBeginEvents,
+      MontageNotifyEndEvents
+    );
+  
+    MontageTracker.MontagePosition = MontageInstance.GetPosition();
+  }
+  
+  gmc_ck(MontageTracker.MontagePosition >= 0.)
+  gmc_ck(MontageTracker.MontagePosition <= MontageTracker.Montage->GetPlayLength())
+  
+  const FGMC_RootMotionExtractionSettings ExtractionSettings = GetRootMotionExtractionMetaData(MontageTracker.Montage);
+  
+  PreProcessRootMotion(MontageInstance, RootMotionParams, ExtractionSettings, DeltaSeconds);
+  
+  if (RootMotionParams.bHasRootMotion)
+  {
+    bHasRootMotion = true;
+  
+    // The root motion translation can be scaled by the user.
+    RootMotionParams.ScaleRootMotionTranslation(GetAnimRootMotionTranslationScale());
+  
+    // Root motion calculations from motion warping
+  	FTransform PreProcessedRootMotion;
+  	if (ProcessRootMotionPreConvertToWorld.IsBound())
+  	{
+  		PreProcessedRootMotion = ProcessRootMotionPreConvertToWorld.Execute(RootMotionParams.GetRootMotionTransform(), this, DeltaSeconds);
+  	}
+  	else
+  	{
+  		PreProcessedRootMotion = RootMotionParams.GetRootMotionTransform();
+  	}
+    const FTransform WorldSpaceRootMotionTransform = SkeletalMesh->ConvertLocalRootMotionToWorld(PreProcessedRootMotion);
+  
+    // Save the root motion transform in world space.
+    RootMotionParams.Set(WorldSpaceRootMotionTransform);
+  
+    // Calculate the root motion velocity from the world space root motion translation.
+    CalculateAnimRootMotionVelocity(ExtractionSettings, DeltaSeconds);
+  
+    // Apply the root motion rotation now. Translation is applied with the next update from the calculated velocity. Splitting root motion translation and
+    // rotation up like this may not be optimal but the alternative is to replicate the rotation for replay which is far more undesirable.
+    ApplyAnimRootMotionRotation(ExtractionSettings, DeltaSeconds);
+  }
+  
+  RootMotionParams.Clear();
+  
+  CallMontageEvents(MontageTracker, bFinishedBlendIn, bStartedBlendOut, MontageNotifyBeginEvents, MontageNotifyEndEvents, DeltaSeconds);
+  
+  gmc_ck(!MontageTracker.bStartedNewMontage)
+  gmc_ck(!MontageTracker.bMontageEnded)
+  gmc_ck(!MontageTracker.bInterruptedPreviousMontage)	
+}
+
+void UGMCE_OrganicMovementCmp::OnSyncDataApplied_Implementation(const FGMC_PawnState& State, EGMC_NetContext Context)
+{
+	Super::OnSyncDataApplied_Implementation(State, Context);
+
+	if (OnSyncDataAppliedDelegate.IsBound())
+	{
+		OnSyncDataAppliedDelegate.Execute(State, Context);
+	}
+}
 #pragma endregion
 
 
@@ -445,8 +543,8 @@ void UGMCE_OrganicMovementCmp::UpdateStopPrediction(float DeltaTime)
 void UGMCE_OrganicMovementCmp::UpdatePivotPrediction(float DeltaTime)
 {
 	const FRotator Rotation = GetActorRotation_GMC();
-	
-	PredictedPivotPoint = PredictGroundedPivotLocation(GetCurrentEffectiveAcceleration(), GetLinearVelocity_GMC(), Rotation, GroundFriction, DeltaTime);
+
+	PredictedPivotPoint = PredictGroundedPivotLocation(GetCurrentEffectiveAcceleration(), GetLinearVelocity_GMC(), Rotation, GroundFriction, DeltaTime, FMath::Clamp(PivotPredictionAngleThreshold, 90.f, 179.f));
 	bTrajectoryIsPivoting = !PredictedPivotPoint.IsZero() && IsInputPresent() && DoInputAndVelocityDiffer();	
 }
 
@@ -484,7 +582,7 @@ FVector UGMCE_OrganicMovementCmp::PredictGroundedStopLocation(const FVector& Cur
 }
 
 FVector UGMCE_OrganicMovementCmp::PredictGroundedPivotLocation(const FVector& CurrentAcceleration,
-	const FVector& CurrentVelocity, const FRotator& CurrentRotation, float Friction, float DeltaTime)
+	const FVector& CurrentVelocity, const FRotator& CurrentRotation, float Friction, float DeltaTime, float AngleThreshold)
 {
 	FVector Result = FVector::ZeroVector;
 	const FVector EffectiveAcceleration = CurrentAcceleration;
@@ -500,8 +598,9 @@ FVector UGMCE_OrganicMovementCmp::PredictGroundedPivotLocation(const FVector& Cu
 
 	const float VelocityAlongAcceleration = (GroundedVelocity | AccelerationDir2D);
 	const float DotProduct = UKismetMathLibrary::Dot_VectorVector(LocalVelocity, LocalAcceleration);
-
-	if (DotProduct < 0.f && VelocityAlongAcceleration < 0.f)
+	const float AngleOffset = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(CurrentVelocity, CurrentAcceleration));
+	
+	if (AngleOffset >= AngleThreshold && VelocityAlongAcceleration < 0.f)
 	{
 		const float SpeedAlongAcceleration = -VelocityAlongAcceleration;
 		const float Divisor = AccelerationSize2D + 2.f * SpeedAlongAcceleration * Friction;

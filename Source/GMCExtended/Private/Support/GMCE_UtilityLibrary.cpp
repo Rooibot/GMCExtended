@@ -1,10 +1,7 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+﻿#include "Support/GMCE_UtilityLibrary.h"
 
-// -- the below comment for ReSharper is just to make it stop whining about "AXY" and "BXY" and so on not
-//    being "appropriate" UE names, and constantly trying to change them to Axy and Bxy and so on.
-//
-// ReSharper disable CppUE4CodingStandardNamingViolationWarning
-#include "Support/GMCE_UtilityLibrary.h"
+#include "GMCPlayerController.h"
+#include "Kismet/KismetMathLibrary.h"
 
 float UGMCE_UtilityLibrary::GetAngleDifferenceXY(const FVector& A, const FVector& B)
 {
@@ -15,7 +12,7 @@ float UGMCE_UtilityLibrary::GetAngleDifferenceXY(const FVector& A, const FVector
 	float Angle = GetAngleDifference(AXY, BXY);
 	const FVector Cross = FVector::CrossProduct(AXY, BXY);
 	Angle *= Cross.Z > 0.f ? 1.f : -1.f;
-	return Angle;	
+	return UKismetMathLibrary::NormalizeAxis(Angle);	
 }
 
 float UGMCE_UtilityLibrary::GetAngleDifferenceZ(const FVector& A, const FVector& B)
@@ -71,4 +68,35 @@ FPoseSearchQueryTrajectory UGMCE_UtilityLibrary::ConvertMovementSampleCollection
 {
 	// Just use the FPoseSearchQueryTrajectory's own conversion operator.
 	return static_cast<FPoseSearchQueryTrajectory>(MovementSampleCollection);
+}
+
+float UGMCE_UtilityLibrary::GetSynchronizedWorldTime(UObject* WorldContextObject)
+{
+	UWorld* World;
+
+	if (WorldContextObject)
+	{
+		World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull);
+	}
+	else
+	{
+		// If we aren't given a world context object, make a best effort.
+		World = GEngine->GetCurrentPlayWorld();
+	}
+
+	// If we have no world, or our world isn't a game world, we don't have any world time.
+	if (!World || !World->IsGameWorld()) return 0.f;
+
+	// If we aren't a client, we ARE the authoritative time.
+	if (World->GetNetMode() != NM_Client) return World->GetRealTimeSeconds();
+
+	// Find a local player controller.
+	const UGameInstance* GameInstance = World->GetGameInstance();
+	if (!GameInstance) return 0.f;
+
+	const AGMC_PlayerController *Controller = Cast<AGMC_PlayerController>(GameInstance->GetFirstLocalPlayerController(World));
+	if (!Controller) return 0.f;
+
+	// Get the GMC-provided synchronized server world time.
+	return Controller->CL_GetSyncedWorldTimeSeconds();
 }

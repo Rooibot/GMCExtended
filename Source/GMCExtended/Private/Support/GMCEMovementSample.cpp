@@ -1,15 +1,3 @@
-/* ROOIBOT CORE FRAMEWORK
- * Copyright 2023, Rooibot Games, LLC. - All rights reserved.
- *
- * The URGTrajectoryMovementComponent and support files have been made
- * available for the use of other licensees of GRIMTEC's Unreal Engine 5
- * plugin "General Movement Component v2". They may be redistributed to 
- * other GMCv2 licensees, provided this notice remains intact.
- *
- * Questions can be addressed to Rachel Blackman at either 
- * rachel.blackman@rooibot.com or as "Packetdancer" on Discord.
- */
-
 #include "Support/GMCEMovementSample.h"
 
 void FGMCE_MovementSample::DrawDebug(const UWorld* World, const FTransform& FromOrigin, const FColor& Color) const
