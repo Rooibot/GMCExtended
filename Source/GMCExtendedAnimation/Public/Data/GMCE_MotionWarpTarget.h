@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
+#include "..\Support\GMCE_DeltaArray.h"
 #include "Net/Serialization/FastArraySerializer.h"
 #include "GMCE_MotionWarpTarget.generated.h"
 
@@ -8,7 +9,7 @@
  * 
  */
 USTRUCT(BlueprintType)
-struct GMCEXTENDEDANIMATION_API FGMCE_MotionWarpTarget : public FFastArraySerializerItem
+struct GMCEXTENDEDANIMATION_API FGMCE_MotionWarpTarget
 {
     GENERATED_BODY()
 
@@ -38,7 +39,7 @@ struct GMCEXTENDEDANIMATION_API FGMCE_MotionWarpTarget : public FFastArraySerial
 
 	FGMCE_MotionWarpTarget()
 		: Name(NAME_None), Location(FVector::ZeroVector), Rotation(FRotator::ZeroRotator), Component(nullptr), BoneName(NAME_None), bFollowComponent(false) {}
-
+	
 	FGMCE_MotionWarpTarget(const FName& InName, const FTransform& InTransform)
 		: Name(InName), Location(InTransform.GetLocation()), Rotation(InTransform.Rotator()), Component(nullptr), BoneName(NAME_None), bFollowComponent(false) {}
 

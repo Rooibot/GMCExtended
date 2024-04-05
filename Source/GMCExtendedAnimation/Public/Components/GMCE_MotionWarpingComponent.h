@@ -8,7 +8,6 @@
 #include "GMCE_SharedVariableComponent.h"
 #include "Components/ActorComponent.h"
 #include "Containers/Map.h"
-#include "Net/Serialization/FastArraySerializer.h"
 #include "GMCE_MotionWarpingComponent.generated.h"
 
 
@@ -36,17 +35,12 @@ struct FGMCE_MotionWarpingWindowData
  * so that it can be wrapped as an FInstancedStruct to be bound via GMC.
  */
 USTRUCT()
-struct FGMCE_MotionWarpTargetContainer : public FFastArraySerializer
+struct FGMCE_MotionWarpTargetContainer
 {
 	GENERATED_USTRUCT_BODY()
 
 	UPROPERTY()
 	TArray<FGMCE_MotionWarpTarget>	WarpTargets;
-
-	bool NetDeltaSerialize(FNetDeltaSerializeInfo & DeltaParms)
-	{
-		return FFastArraySerializer::FastArrayDeltaSerialize<FGMCE_MotionWarpTarget, FGMCE_MotionWarpTargetContainer>( WarpTargets, DeltaParms, *this );
-	}
 
 	bool FindAndUpdateTarget(FGMCE_MotionWarpTarget& Target)
 	{
@@ -58,7 +52,6 @@ struct FGMCE_MotionWarpTargetContainer : public FFastArraySerializer
 				{
 					// Only update and mark dirty if we aren't just setting an identical value.
 					WarpTargets[Idx] = Target;
-					MarkItemDirty(Target);
 				}
 				return true;
 			}
@@ -72,25 +65,18 @@ struct FGMCE_MotionWarpTargetContainer : public FFastArraySerializer
 		if (!FindAndUpdateTarget(Target))
 		{
 			WarpTargets.Add(Target);
-			MarkItemDirty(Target);
 		}	
 	}
 	
 	void RemoveTargetByName(FName TargetName)
 	{
 		const int32 NumRemoved = WarpTargets.RemoveAll([&TargetName](const FGMCE_MotionWarpTarget& WarpTarget) { return WarpTarget.Name == TargetName; });
-
-		if (NumRemoved > 0)
-		{
-			MarkArrayDirty();
-		}
 		
 	}
 
 	void RemoveAllTargets()
 	{
 		WarpTargets.Empty();
-		MarkArrayDirty();
 	}
 
 	TArray<FGMCE_MotionWarpTarget> GetTargets() const { return WarpTargets; }
@@ -114,15 +100,6 @@ struct FGMCE_MotionWarpTargetContainer : public FFastArraySerializer
 		return Result;
 	}
 
-};
-
-template<>
-struct TStructOpsTypeTraits< FGMCE_MotionWarpTargetContainer > : public TStructOpsTypeTraitsBase2< FGMCE_MotionWarpTargetContainer >
-{
-	enum 
-	{
-		WithNetDeltaSerializer = true,
-   };
 };
 
 
@@ -210,7 +187,7 @@ public:
 
 	UGMCE_RootMotionModifier* AddModifierFromTemplate(UGMCE_RootMotionModifier* Template, const UAnimSequenceBase* Animation, float StartTime, float EndTime);
 
-	
+	const FGMCE_MotionWarpTargetContainer& GetWarpTargets() const { return WarpTargetContainerInstance.Get<FGMCE_MotionWarpTargetContainer>(); }
 	
 protected:
 
