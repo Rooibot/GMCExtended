@@ -1,6 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
-
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GMCEMovementSample.h"
@@ -49,4 +47,9 @@ public:
 	/// Converts a GMCEx Movement Sample Collection into an Epic Pose Search Query Trajectory.
 	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
 	static FPoseSearchQueryTrajectory ConvertMovementSampleCollectionToPoseSearchQueryTrajectory(const FGMCE_MovementSampleCollection& MovementSampleCollection);
+
+	/// Get the server's RealTimeSeconds, as synchronized by GMC.
+	UFUNCTION(BlueprintPure, Category="Time")
+	static float GetSynchronizedWorldTime(UObject *WorldContextObject);
+
 };

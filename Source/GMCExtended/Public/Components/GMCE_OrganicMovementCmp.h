@@ -1,6 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
-
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GMCE_CoreComponent.h"
@@ -9,7 +7,11 @@
 #include "Support/GMCEMovementSample.h"
 #include "GMCE_OrganicMovementCmp.generated.h"
 
-UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent, DisplayName="GMCExtended Organic Movement Component"))
+DECLARE_DELEGATE_RetVal_ThreeParams(FTransform, FOnProcessRootMotion, const FTransform&, UGMCE_OrganicMovementCmp*, float)
+DECLARE_DELEGATE_TwoParams(FOnSyncDataApplied, const FGMC_PawnState&, EGMC_NetContext)
+DECLARE_DELEGATE(FOnBindReplicationData)
+
+UCLASS(ClassGroup=(GMCExtended), meta=(BlueprintSpawnableComponent, DisplayName="GMCExtended Organic Movement Component"))
 class GMCEXTENDED_API UGMCE_OrganicMovementCmp : public UGMCE_CoreComponent
 {
 	GENERATED_BODY()
@@ -37,7 +39,7 @@ public:
 
 	virtual void PhysicsCustom_Implementation(float DeltaSeconds) override;
 	virtual float GetInputAccelerationCustom_Implementation() const override;
-	
+
 	// Utilities
 
 	// Debug
@@ -48,6 +50,18 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Movement Trajectory")
 	bool IsTrajectoryDebugEnabled() const;
+
+#pragma region Animation Support
+protected:
+	virtual void MontageUpdate(float DeltaSeconds) override;
+	virtual void OnSyncDataApplied_Implementation(const FGMC_PawnState& State, EGMC_NetContext Context) override;
+	
+public:
+	FOnProcessRootMotion ProcessRootMotionPreConvertToWorld;
+	FOnSyncDataApplied OnSyncDataAppliedDelegate;
+	FOnBindReplicationData OnBindReplicationData;
+
+#pragma endregion
 	
 	// Trajectory state functionality (input presence, acceleration synthesis for simulated proxies, etc.)
 #pragma region Trajectory State
@@ -115,11 +129,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory|Precalculations")
 	bool bPrecalculateDistanceMatches { true };
 
-	UFUNCTION(BlueprintPure, Category="RooiCore Trajectory Matching", meta=(ToolTip="Returns a predicted point relative to the actor where they'll come to a stop.", BlueprintThreadSafe))
+	/// The angle of difference which we must exceed before a pivot can be predicted. Must be
+	/// between 90 and 179. Recommended values are between 90 and 135.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory", meta=(UIMin="90", UIMax="179"))
+	float PivotPredictionAngleThreshold { 90.f };
+	
+	UFUNCTION(BlueprintPure, Category="Trajectory Matching", meta=(ToolTip="Returns a predicted point relative to the actor where they'll come to a stop.", BlueprintThreadSafe))
 	static FVector PredictGroundedStopLocation(const FVector& CurrentVelocity, float BrakingDeceleration, float Friction, float DeltaTime);
 
-	UFUNCTION(BlueprintPure, Category="RooiCore Trajectory Matching", meta=(ToolTip="Returns a predicted point relative to the actor where they'll finish a pivot.", BlueprintThreadSafe))
-	static FVector PredictGroundedPivotLocation(const FVector& CurrentAcceleration, const FVector& CurrentVelocity, const FRotator& CurrentRotation, float Friction, float DeltaTime);
+	UFUNCTION(BlueprintPure, Category="Trajectory Matching", meta=(ToolTip="Returns a predicted point relative to the actor where they'll finish a pivot.", BlueprintThreadSafe))
+	static FVector PredictGroundedPivotLocation(const FVector& CurrentAcceleration, const FVector& CurrentVelocity, const FRotator& CurrentRotation, float Friction, float DeltaTime, float AngleThreshold = 90.f);
 
 
 private:
