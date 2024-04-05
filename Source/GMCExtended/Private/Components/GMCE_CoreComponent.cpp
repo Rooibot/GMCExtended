@@ -98,11 +98,26 @@ void UGMCE_CoreComponent::BindReplicationData_Implementation()
 	BindSharedGameplayTagContainerVariables();
 }
 
-
-void UGMCE_CoreComponent::PostMovementUpdate_Implementation(float DeltaSeconds)
+void UGMCE_CoreComponent::OnSyncDataApplied_Implementation(const FGMC_PawnState& State, EGMC_NetContext Context)
 {
-	Super::PostMovementUpdate_Implementation(DeltaSeconds);
+	Super::OnSyncDataApplied_Implementation(State, Context);
 
+	// These states should cover all post-movement, just-updated-from-server, and simulation update scenarios.
+	// This should ensure full coverage to check for variable updates (and notify any delegates) if values have
+	// changed since the last time through.
+	if (Context == EGMC_NetContext::LocalClientPawn_PostMoveExecution ||
+		Context == EGMC_NetContext::LocalClientPawn_ServerStateAdoptedForReplay ||
+		Context == EGMC_NetContext::LocalServerPawn_PostMoveExecution ||
+		Context == EGMC_NetContext::RemoteServerPawn_PostMoveExecution ||
+		Context == EGMC_NetContext::RemoteClientPawn_Simulation)
+	{
+		CheckForSharedVariableUpdates();
+	}
+}
+
+void UGMCE_CoreComponent::CheckForSharedVariableUpdates()
+{
+	// Handle notification for any shared variable bindings where the values have changed.
 	POST_MOVEMENT_HANDLER(Bool, bool)
 	POST_MOVEMENT_HANDLER(HalfByte, uint8)
 	POST_MOVEMENT_HANDLER(Byte, uint8)
@@ -120,7 +135,24 @@ void UGMCE_CoreComponent::PostMovementUpdate_Implementation(float DeltaSeconds)
 	POST_MOVEMENT_HANDLER(AnimMontageReference, UAnimMontage*)
 	POST_MOVEMENT_HANDLER(Name, FName)
 	POST_MOVEMENT_HANDLER(GameplayTag, FGameplayTag)
-	POST_MOVEMENT_HANDLER(GameplayTagContainer, FGameplayTagContainer)
+	POST_MOVEMENT_HANDLER(GameplayTagContainer, FGameplayTagContainer)	POST_MOVEMENT_HANDLER(Bool, bool)
+	POST_MOVEMENT_HANDLER(HalfByte, uint8)
+	POST_MOVEMENT_HANDLER(Byte, uint8)
+	POST_MOVEMENT_HANDLER(Int, int32)
+	POST_MOVEMENT_HANDLER(SinglePrecisionFloat, float)
+	POST_MOVEMENT_HANDLER(CompressedSinglePrecisionFloat, float)
+	POST_MOVEMENT_HANDLER(DoublePrecisionFloat, double)
+	POST_MOVEMENT_HANDLER(CompressedDoublePrecisionFloat, double)
+	POST_MOVEMENT_HANDLER(TruncatedDoublePrecisionFloat, double)
+	POST_MOVEMENT_HANDLER(CompressedVector2D, FVector2D)
+	POST_MOVEMENT_HANDLER(CompressedVector, FVector)
+	POST_MOVEMENT_HANDLER(CompressedRotator, FRotator)
+	POST_MOVEMENT_HANDLER(ActorReference, AActor*)
+	POST_MOVEMENT_HANDLER(ActorComponentReference, UActorComponent*)
+	POST_MOVEMENT_HANDLER(AnimMontageReference, UAnimMontage*)
+	POST_MOVEMENT_HANDLER(Name, FName)
+	POST_MOVEMENT_HANDLER(GameplayTag, FGameplayTag)
+	POST_MOVEMENT_HANDLER(GameplayTagContainer, FGameplayTagContainer)			
 }
 
 

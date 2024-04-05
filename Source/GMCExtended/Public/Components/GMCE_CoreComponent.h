@@ -107,7 +107,9 @@ public:
 	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 	virtual void BindReplicationData_Implementation() override;
-	virtual void PostMovementUpdate_Implementation(float DeltaSeconds) override;
+	virtual void OnSyncDataApplied_Implementation(const FGMC_PawnState& State, EGMC_NetContext Context) override;
+
+	virtual void CheckForSharedVariableUpdates();
 
 	// SharedVars - Bool
 #pragma region

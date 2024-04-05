@@ -8,9 +8,21 @@ There will be better documentation here eventually. Probably.
 
 Things currently in the project:
 
-## UGMCE_OrganicMovementCmp
+## GMCExtended
 
-This is an extension of GMCv2's Organic Movement Component, adding a few things:
+This module contains the core movement logic and general support code. The primary things in the GMCExtended module are:
+
+### UGMCE_CoreComponent
+
+This component is a child of GMC's own Organic Movement Component, which provides an implementation of a "shared variable" system. This system basically allows other components to request that GMC itself register and bind 'shared variables' and triggers a notification whenever a shared variable changes. Variables are shared between components, allowing multiple things to access a single bound variable by name. 
+
+Shared variable update handlers should be triggered even on simulated proxies, if the variables are replicated there.
+
+In addition, there is a "Shared Variable Component Interface"; any component on a pawn which implements this will have an `OnBindSharedVariables` function  before replication bindings are made; while this is intended to allow components to register shared variables, it can also be used to allow components which need to bind variables via the GMC to be called at an appropriate time, even if they were added by blueprint.
+
+### UGMCE_OrganicMovementCmp
+
+This is an extension of the above `UGCME_CoreComponent`, adding a few things:
 
 * Stop/pivot prediction (for distance matching), available via 
 * Trajectory prediction (for motion trajectory)
@@ -27,7 +39,7 @@ Some details...
 
 ### Stop/Pivot Prediction
 
-The component can be set to automatically keep stop/pivot predictions up-to-date via the `Precalculate Distance Matches` setting; they can also be manually calculated by calling `UpdateStopPredictions` and `UpdatePivotPredictions` instead. The calculated results are available via `IsStopPredicted` and `IsPivotPredicted`.
+The component can be set to automatically keep stop/pivot predictions up-to-date via the `Precalculate Distance Matches` setting; they can also be manually calculated by calling `UpdateStopPredictions` and `UpdatePivotPredictions` instead. The calculated results are available via `IsStopPredicted` and `IsPivotPredicted`. In addition, the `PivotPredictionAngleThreshold` can be set to ensure pivots are only predicted if the predicted trajectory is offset by more than a certain amount from the current velocity. By default, it is set to 90 degrees, but for some situations people may find 135 degrees more suitable.
 
 (The calculations can also manually be done via the Blueprint thread-safe functions `PredictGroundedStopLocation` and `PredictGroundedPivotLocation`.)
 
@@ -37,22 +49,28 @@ If `Draw Debug Predictions` is enabled with precalculations enabled, the compone
 
 If `Trajectory Enabled` is true, the component will keep historical samples; if `Precalculate Future Trajectory` is also true, the component will keep a constantly-updated version of the predicted trajectory available in `Predicted Trajectory`.
 
-There's also an `FGMCE_MovementSample` which serves as the data storage container for the trajectory, and which can be cast into a stock Unreal `FTrajectorySample` as-needed, as well as an `FGMCE_MovementSampleCollection` which can similarly be cast into an `FTrajectorySampleRange`. For blueprint use, there are also two blueprint functions provided to turn the GMCEx structures into standard Epic Motion Trajectory ones.
+There's also an `FGMCE_MovementSample` which serves as the data storage container for the trajectory, and which can be cast into a stock Unreal `FTrajectorySample` or the newer `FPoseSearchQueryTrajectorySample` as-needed, as well as an `FGMCE_MovementSampleCollection` which can similarly be cast into an `FTrajectorySampleRange` or the newer `FPoseSearchQueryTrajectory`.
+
+For blueprint use, there are also two blueprint functions provided to turn the GMCEx structures into standard Epic Motion Trajectory ones.
 
 If `Draw Debug Predictions` is enabled with precalculations enabled, the component will draw a pathway showing historical movement and predicted trajectory.
 
 ### Ragdolling
 
-***Note:** This functionality was hastily written and could definitely be improved on. Maybe by you! Feel free to fork, modify, and make a merge request!*
+***Note:** This functionality was hastily written as a hypothetical example for soemone on the GMC Discord, and could definitely be improved on. Maybe by you! Feel free to fork, modify, and make a merge request!*
 
-This component uses the GMC `Custom1` movement mode for ragdolling logic; `Enable Ragdoll` and `Disable Ragdoll` will toggle the character into ragdoll mode or back to normal grounded movement.
+This component uses the GMC `Custom1` movement mode for ragdolling logic; `Enable Ragdoll` and `Disable Ragdoll` will toggle the character into ragdoll mode or back to normal grounded movement; it will make an attempt to preserve velocity when toggling ragdolling on. Which movement mode is used can be changed by overriding `GetRagdollMovementMode` to return something other than `Custom1`. 
 
-For purposes of network sync, the character's position will remain unchanged when ragdolling; the skeletal mesh will be thrown (preserving velocity) as a ragdoll, but upon disabling ragdoll mode, the mesh will snap back to the position it was in at the time of ragdoll.
-
-(Since ragdolling is usually used on death, before respawning a character, this didn't seem a limitation worth spending a ton of time to solve.)
-
-It's worth noting that in the common setup with a spring arm and camera attached to the collision capsule, the camera will NOT follow the ragdolled mesh. (There are ways to solve that, but they're left as a game-specific exercise to the user.)
-
-## UGMCE_UtilityLibrary
+### UGMCE_UtilityLibrary
 
 A blueprint function library providing some useful little oft-used calculations, such as calculating the angle of difference between two trajectories and returning a value in the range of -180 to 180 degrees.
+
+## GMCExtendedAnimation
+
+This module provides useful animation implementations atop GMC. Right now, there's only the one thing really:
+
+### UGMCE_MotionWarpingComponent
+
+The motion warping component provides a fundamentally similar implementation to Epic's stock motion warping component, albeit automatically integrating with GMC; this allows the motion warp targets to be replicated in GMC moves alongside montage data, ensuring they stay in sync and the root motion warping can be applied with a minimal number of corrections. Currently, the implementation only provides Skew Warp and Scale warping operations; as these are really the only ones anyone uses in Epic's own plugin, that seemed a sufficient start.
+
+It is worth noting that for this functionality to work, your GMC movement component must currently inherit from GMCEx's `UGMCE_OrganicMovementComponent`; this is because ensuring it worked with GMC's own root motion montage support required overriding `MontageUpdate` in order to add an optional root motion preprocessing hook. However, it will also use the Core Component Shared Variable functionality to automatically hook for binding registration, so merely adding the motion warping component alongside a GMCEx organic movement component will have them automatically negotiate all the necessary links between the two for themselves.
