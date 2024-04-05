@@ -37,7 +37,7 @@ This is an extension of the above `UGCME_CoreComponent`, adding a few things:
 
 Some details...
 
-### Stop/Pivot Prediction
+#### Stop/Pivot Prediction
 
 The component can be set to automatically keep stop/pivot predictions up-to-date via the `Precalculate Distance Matches` setting; they can also be manually calculated by calling `UpdateStopPredictions` and `UpdatePivotPredictions` instead. The calculated results are available via `IsStopPredicted` and `IsPivotPredicted`. In addition, the `PivotPredictionAngleThreshold` can be set to ensure pivots are only predicted if the predicted trajectory is offset by more than a certain amount from the current velocity. By default, it is set to 90 degrees, but for some situations people may find 135 degrees more suitable.
 
@@ -45,7 +45,7 @@ The component can be set to automatically keep stop/pivot predictions up-to-date
 
 If `Draw Debug Predictions` is enabled with precalculations enabled, the component will draw predicted stop and pivot points; predicted pivot points are yellow (turning to white at the final prediction), while predicted stop points are blue (turning to black at the final prediction).
 
-### Trajectory Prediction
+#### Trajectory Prediction
 
 If `Trajectory Enabled` is true, the component will keep historical samples; if `Precalculate Future Trajectory` is also true, the component will keep a constantly-updated version of the predicted trajectory available in `Predicted Trajectory`.
 
@@ -55,7 +55,7 @@ For blueprint use, there are also two blueprint functions provided to turn the G
 
 If `Draw Debug Predictions` is enabled with precalculations enabled, the component will draw a pathway showing historical movement and predicted trajectory.
 
-### Ragdolling
+#### Ragdolling
 
 ***Note:** This functionality was hastily written as a hypothetical example for soemone on the GMC Discord, and could definitely be improved on. Maybe by you! Feel free to fork, modify, and make a merge request!*
 
