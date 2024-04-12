@@ -406,6 +406,61 @@ float UGMCE_OrganicMovementCmp::GetInputAccelerationCustom_Implementation() cons
 	return Super::GetInputAccelerationCustom_Implementation();
 }
 
+void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
+{
+	bool bUseParent = true;
+
+	// If we're using "Require Facing Before Move" and we're on the ground and we're not currently
+	// moving, we want to check our offset angle.
+	if (bRequireFacingBeforeMove && IsMovingOnGround() && Velocity.IsNearlyZero())
+	{
+		const FVector VelocityDirection = Velocity.GetSafeNormal();
+		const float VelocityAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(VelocityDirection, UpdatedComponent->GetForwardVector()));
+
+		// If our velocity is less than our threshold angle, we can move normally. Otherwise, we'll want to just
+		// turn-in-place instead.
+		bUseParent = VelocityAngle <= FacingAngleOffsetThreshold;
+	}
+
+	if (bUseParent)
+	{
+		Super::CalculateVelocity(DeltaSeconds);
+		return;
+	}
+
+	if (bUseSafeRotations)
+	{
+		RotateYawTowardsDirectionSafe(Velocity, RotationRate, DeltaSeconds);
+	}
+	else
+	{
+		RotateYawTowardsDirection(Velocity, RotationRate, DeltaSeconds);
+	}
+	
+}
+
+void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
+                                             const FGMC_RootMotionVelocitySettings& RootMotionMetaData, float DeltaSeconds)
+{
+	// If we're orienting to velocity and either have no root motion or are applying rotation atop
+	// root motion, rotate towards the direction we're moving in.
+	if (bOrientToVelocityDirection && (!HasRootMotion() || RootMotionMetaData.bApplyRotationWithRootMotion))
+	{
+		if(bUseSafeRotations)
+		{
+			RotateYawTowardsDirectionSafe(Velocity, RotationRate, DeltaSeconds);
+		}
+		else
+		{
+			RotateYawTowardsDirection(Velocity, RotationRate, DeltaSeconds);
+		}
+		return;
+	}
+
+	// Otherwise just let GMC handle it as normal.
+	Super::ApplyRotation(bIsDirectBotMove, RootMotionMetaData, DeltaSeconds);
+}
+
 void UGMCE_OrganicMovementCmp::MontageUpdate(float DeltaSeconds)
 {
   bHasRootMotion = false;

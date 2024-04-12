@@ -39,7 +39,31 @@ public:
 
 	virtual void PhysicsCustom_Implementation(float DeltaSeconds) override;
 	virtual float GetInputAccelerationCustom_Implementation() const override;
+	virtual void CalculateVelocity(float DeltaSeconds) override;
 
+	virtual void ApplyRotation(bool bIsDirectBotMove, const FGMC_RootMotionVelocitySettings& RootMotionMetaData, float DeltaSeconds) override;
+
+	// General functionality
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Operation")
+	/// When true, the pawn will smoothly rotate around the yaw axis to face the current direction of movement.
+	/// This setting will take precedence over bOrientToInputDirection or bOrientToControlRotationDirection if
+	/// either of the other two are set. This is very similar to bOrientToInputDirection
+	bool bOrientToVelocityDirection{false};
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Operation")
+	/// If true, if the direction a character is trying to move differs from the current forward vector
+	/// by more than a certain amount, the character will only rotate rather than actually moving. This should
+	/// only be used with non-strafing movement, and generally in conjunction with either bOrientToVelocityDirection
+	/// or bOrientToInputDirection.
+	bool bRequireFacingBeforeMove{false};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Operation")
+	/// When bRequireFacingBeforeMove is true, if the character attempts to move in a direction more than
+	/// this many degrees off from the current 'forward' direction, they will rotate until they are within
+	/// this threshold of their movement direction before they begin moving forward.
+	float FacingAngleOffsetThreshold { 25.f };
+	
 	// Utilities
 
 	// Debug

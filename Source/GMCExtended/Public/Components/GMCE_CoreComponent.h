@@ -32,10 +32,13 @@ public:
 	/// Get the name of this shared variable.
 	FName GetName() const { return VariableName; }
 
+	/// Get the current value of this shared variable.
 	T GetValue() const { return CurrentValue; }
 
+	/// Set a current value for this shared variable.
 	void SetValue(T NewValue) { CurrentValue = NewValue; };
 
+	/// Obtain the GMC bind index for this variable.
 	int32 GetBindIndex() const { return BindIndex; }
 	
 	bool operator==(const TGMCE_SharedVariable<T>& Other ) const { return GetName() == VariableName; }
