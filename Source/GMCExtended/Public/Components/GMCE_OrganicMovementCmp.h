@@ -33,6 +33,7 @@ public:
 	virtual void BindReplicationData_Implementation() override;
 	virtual void MovementUpdate_Implementation(float DeltaSeconds) override;
 	virtual void GenSimulationTick_Implementation(float DeltaTime) override;
+	virtual void GenAncillaryTick_Implementation(float DeltaTime, bool bLocalMove, bool bCombinedClientMove) override;
 	virtual bool UpdateMovementModeDynamic_Implementation(FGMC_FloorParams& Floor, float DeltaSeconds) override;
 	virtual void OnMovementModeChanged_Implementation(EGMC_MovementMode PreviousMovementMode) override;
 	virtual void OnMovementModeChangedSimulated_Implementation(EGMC_MovementMode PreviousMovementMode) override;
@@ -48,14 +49,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Operation")
 	/// When true, the pawn will smoothly rotate around the yaw axis to face the current direction of movement.
 	/// This setting will take precedence over bOrientToInputDirection or bOrientToControlRotationDirection if
-	/// either of the other two are set. This is very similar to bOrientToInputDirection
+	/// either of the other two are set. This is very similar to bOrientToInputDirection, but driven by the actual
+	/// movement rather than input. If both OrientToInputDirection and bOrientToVelocityDirection are set,
+	/// Input Direction will be utilized when starting from a standstill.
 	bool bOrientToVelocityDirection{false};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Operation")
+	/// If both bOrientToVelocityDirection and bOrientToInputDirection are true, the ground speed must be
+	/// greater than this amount to orient towards the velocity; any lower and it will orient towards input instead.
+	float MinimumVelocityForOrientation { 100.f };
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Operation")
 	/// If true, if the direction a character is trying to move differs from the current forward vector
 	/// by more than a certain amount, the character will only rotate rather than actually moving. This should
-	/// only be used with non-strafing movement, and generally in conjunction with either bOrientToVelocityDirection
-	/// or bOrientToInputDirection.
+	/// only be used with non-strafing movement, and generally in conjunction with either bOrientToInputDirection
+	/// or the combined bOrientToInputDirection / bOrientToVelocityDirection mode.
 	bool bRequireFacingBeforeMove{false};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Operation")
@@ -79,12 +87,48 @@ public:
 protected:
 	virtual void MontageUpdate(float DeltaSeconds) override;
 	virtual void OnSyncDataApplied_Implementation(const FGMC_PawnState& State, EGMC_NetContext Context) override;
+
+	void UpdateAnimationHelperValues(float DeltaSeconds);
 	
 public:
+	FRotator GetCurrentAimRotation() const { return CurrentAimRotation; }
+	FRotator GetLastAimRotation() const { return LastAimRotation; }
+	float GetCurrentAimYawRate() const { return CurrentAimYawRate; }
+
+	FRotator GetCurrentComponentRotation() const { return CurrentComponentRotation; }
+	FRotator GetLastComponentRotation() const { return LastComponentRotation; }
+	float GetCurrentComponentYawRate() const { return CurrentComponentYawRate; }
+
+	FVector GetCurrentAnimationAcceleration() const { return CurrentAnimationAcceleration; }
+	
 	FOnProcessRootMotion ProcessRootMotionPreConvertToWorld;
 	FOnSyncDataApplied OnSyncDataAppliedDelegate;
 	FOnBindReplicationData OnBindReplicationData;
 
+protected:
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	FRotator CurrentAimRotation { FRotator::ZeroRotator };
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	FRotator LastAimRotation { FRotator::ZeroRotator };
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	float CurrentAimYawRate { 0.f };
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	FRotator CurrentComponentRotation { FRotator::ZeroRotator };
+	
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	FRotator LastComponentRotation { FRotator::ZeroRotator };
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	float CurrentComponentYawRate { 0.f };
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	FVector CurrentAnimationAcceleration { 0.f };
+
+	FVector LastAnimationVelocity { 0.f };
+	
 #pragma endregion
 	
 	// Trajectory state functionality (input presence, acceleration synthesis for simulated proxies, etc.)

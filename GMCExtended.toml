@@ -1,0 +1,8 @@
+input_dirs = ["./Source/GMCExtended", "./Source/GMCExtendedAnimation"]
+output_dir = "./Docs"
+backend = "MdBook"
+
+[backend_mdbook]
+title = "GMC Extended"
+build = true
+cleanup = true

@@ -249,7 +249,15 @@ void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
 	Super::GenSimulationTick_Implementation(DeltaTime);
 
 	// If we're being simulated, we should always synthesize an acceleration from past movements.
-	UpdateCalculatedEffectiveAcceleration();	
+	UpdateCalculatedEffectiveAcceleration();
+	UpdateAnimationHelperValues(DeltaTime);
+}
+
+void UGMCE_OrganicMovementCmp::GenAncillaryTick_Implementation(float DeltaTime, bool bLocalMove,
+	bool bCombinedClientMove)
+{
+	Super::GenAncillaryTick_Implementation(DeltaTime, bLocalMove, bCombinedClientMove);
+	UpdateAnimationHelperValues(DeltaTime);
 }
 
 bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_FloorParams& Floor, float DeltaSeconds)
@@ -408,35 +416,34 @@ float UGMCE_OrganicMovementCmp::GetInputAccelerationCustom_Implementation() cons
 
 void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 {
-	bool bUseParent = true;
-
 	// If we're using "Require Facing Before Move" and we're on the ground and we're not currently
-	// moving, we want to check our offset angle.
+	// moving, we want to check the direction we're TRYING to move and see if we're offset at all.
 	if (bRequireFacingBeforeMove && IsMovingOnGround() && Velocity.IsNearlyZero())
 	{
-		const FVector VelocityDirection = Velocity.GetSafeNormal();
-		const float VelocityAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(VelocityDirection, UpdatedComponent->GetForwardVector()));
+		// We have to use the input vector instead of the 
+		const FVector InputDirection = GetProcessedInputVector();
+		const float VelocityAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(InputDirection, UpdatedComponent->GetForwardVector()));
 
 		// If our velocity is less than our threshold angle, we can move normally. Otherwise, we'll want to just
 		// turn-in-place instead.
-		bUseParent = VelocityAngle <= FacingAngleOffsetThreshold;
+		if (VelocityAngle > FacingAngleOffsetThreshold)
+		{
+			// We're not calling our parent implementation, and we're not moving until we're within our angle threshold.
+			Velocity = FVector::ZeroVector;
+		
+			if (bUseSafeRotations)
+			{
+				RotateYawTowardsDirectionSafe(InputDirection, RotationRate, DeltaSeconds);
+			}
+			else
+			{
+				RotateYawTowardsDirection(InputDirection, RotationRate, DeltaSeconds);
+			}
+			return;
+		}
 	}
 
-	if (bUseParent)
-	{
-		Super::CalculateVelocity(DeltaSeconds);
-		return;
-	}
-
-	if (bUseSafeRotations)
-	{
-		RotateYawTowardsDirectionSafe(Velocity, RotationRate, DeltaSeconds);
-	}
-	else
-	{
-		RotateYawTowardsDirection(Velocity, RotationRate, DeltaSeconds);
-	}
-	
+	Super::CalculateVelocity(DeltaSeconds);
 }
 
 void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
@@ -446,13 +453,23 @@ void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
 	// root motion, rotate towards the direction we're moving in.
 	if (bOrientToVelocityDirection && (!HasRootMotion() || RootMotionMetaData.bApplyRotationWithRootMotion))
 	{
+		// We default towards orienting towards our velocity.
+		FVector OrientTowards = Velocity;
+
+		// If we aren't moving and orient to input direction is *also* set, we'll utilize input direction
+		// until we're actually moving. This works well with bRequireFacingBeforeMove.
+		if (bOrientToInputDirection && GetSpeedXY() < MinimumVelocityForOrientation)
+		{
+			OrientTowards = GetProcessedInputVector();
+		}
+		
 		if(bUseSafeRotations)
 		{
-			RotateYawTowardsDirectionSafe(Velocity, RotationRate, DeltaSeconds);
+			RotateYawTowardsDirectionSafe(OrientTowards, RotationRate, DeltaSeconds);
 		}
 		else
 		{
-			RotateYawTowardsDirection(Velocity, RotationRate, DeltaSeconds);
+			RotateYawTowardsDirection(OrientTowards, RotationRate, DeltaSeconds);
 		}
 		return;
 	}
@@ -460,6 +477,9 @@ void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
 	// Otherwise just let GMC handle it as normal.
 	Super::ApplyRotation(bIsDirectBotMove, RootMotionMetaData, DeltaSeconds);
 }
+#pragma endregion 
+
+#pragma region Animation Support
 
 void UGMCE_OrganicMovementCmp::MontageUpdate(float DeltaSeconds)
 {
@@ -556,6 +576,20 @@ void UGMCE_OrganicMovementCmp::OnSyncDataApplied_Implementation(const FGMC_PawnS
 	{
 		OnSyncDataAppliedDelegate.Execute(State, Context);
 	}
+}
+
+void UGMCE_OrganicMovementCmp::UpdateAnimationHelperValues(float DeltaSeconds)
+{
+	LastAimRotation = CurrentAimRotation;
+	CurrentAimRotation = GetControllerRotation_GMC().GetNormalized();
+	CurrentAimYawRate = (CurrentAimRotation.Yaw - LastAimRotation.Yaw) / DeltaSeconds;
+
+	LastComponentRotation = CurrentComponentRotation;
+	CurrentComponentRotation = UpdatedComponent->GetComponentRotation().GetNormalized();
+	CurrentComponentYawRate = (LastComponentRotation.Yaw - CurrentComponentRotation.Yaw) / DeltaSeconds;
+
+	CurrentAnimationAcceleration = (Velocity - LastAnimationVelocity) / DeltaSeconds;
+	LastAnimationVelocity = Velocity;
 }
 #pragma endregion
 
