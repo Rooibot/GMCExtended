@@ -21,8 +21,31 @@ void UGMCE_OrganicMovementCmp::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// ...
-	
+	for (const auto& SolverClass : SolverClasses)
+	{
+		// We do not allow abstract parent solvers to be instantiated.
+		if (SolverClass->HasAnyClassFlags(CLASS_Abstract))
+			continue;
+		
+		// Make sure we don't have some version of this solver already instantiated, since you
+		// can set up instances of solvers in configuration as well.
+		for (const auto& SolverCheck : Solvers)
+		{
+			if (SolverCheck->GetClass()->IsChildOf(SolverClass))
+				continue;
+		}
+		
+		UGMCE_BaseSolver *NewBase = NewObject<UGMCE_BaseSolver>(this, SolverClass);
+		Solvers.Add(NewBase);
+	}
+
+	// Actually set up solvers.
+	for (const auto& Solver : Solvers)
+	{
+		Solver->SetupSolverInternal(this);
+		Solver->InitializeSolver();
+	}
+
 }
 
 
@@ -219,10 +242,51 @@ void UGMCE_OrganicMovementCmp::BindReplicationData_Implementation()
 		EGMC_InterpolationFunction::Linear
 	);
 
+	BI_AvailableSolvers = BindGameplayTagContainer(
+		AvailableSolvers,
+		EGMC_PredictionMode::ServerAuth_Output_ClientValidated,
+		EGMC_CombineMode::CombineIfUnchanged,
+		EGMC_SimulationMode::Periodic_Output,
+		EGMC_InterpolationFunction::NearestNeighbour
+	);
+
+	BI_CurrentActiveSolverTag = BindGameplayTag(
+		CurrentActiveSolverTag,
+		EGMC_PredictionMode::ServerAuth_Output_ClientValidated,
+		EGMC_CombineMode::CombineIfUnchanged,
+		EGMC_SimulationMode::PeriodicAndOnChange_Output,
+		EGMC_InterpolationFunction::NearestNeighbour
+	);	
+	
 	if (OnBindReplicationData.IsBound())
 	{
 		OnBindReplicationData.Execute();
 	}
+}
+
+FVector UGMCE_OrganicMovementCmp::PreProcessInputVector_Implementation(FVector InRawInputVector)
+{
+	FVector Result = Super::PreProcessInputVector_Implementation(InRawInputVector);
+	
+	if (GetMovementMode() == GetSolverMovementMode())
+	{
+		if (const auto ActiveSolver = GetActiveSolver())
+		{
+			FSolverState State = GetSolverState();
+			State.ProcessedInput = Result;
+			ActiveSolver->PreProcessInput(State);
+
+			Result = State.ProcessedInput;
+		}
+	}
+	return Result;
+}
+
+void UGMCE_OrganicMovementCmp::PreMovementUpdate_Implementation(float DeltaSeconds)
+{
+	Super::PreMovementUpdate_Implementation(DeltaSeconds);
+
+	RunSolvers(DeltaSeconds);	
 }
 
 void UGMCE_OrganicMovementCmp::MovementUpdate_Implementation(float DeltaSeconds)
@@ -273,6 +337,19 @@ bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_Flo
 		SetMovementMode(bWantsRagdoll ? GetRagdollMode() : EGMC_MovementMode::Grounded);
 		return true;
 	}
+
+	if (CurrentActiveSolverTag.IsValid())
+	{
+		SetMovementMode(GetSolverMovementMode());
+		return true;
+	}
+	
+	// If we disable solver mode, we revert to airborne to allow GMC to sort things out itself.
+	if (GetMovementMode() == GetSolverMovementMode())
+	{
+		SetMovementMode(EGMC_MovementMode::Airborne);
+	}
+	
 	
 	return Super::UpdateMovementModeDynamic_Implementation(Floor, DeltaSeconds);
 }
@@ -399,7 +476,41 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 				}
 			}
 		}
+		return;
 	}
+
+	if (GetMovementMode() == GetSolverMovementMode())
+	{
+		if (const auto Solver = GetActiveSolver())
+		{
+			FSolverState State = GetSolverState();
+
+			if (Solver->PerformMovement(State, DeltaSeconds))
+			{
+				// Solver wants to maintain control. However, make sure to check if our active solver tag needs to
+				// change. This may be true for something like the climbing solver, which handles both climbing
+				// and mantling.
+				if (const FGameplayTag& NewSolverTag = Solver->GetPreferredSolverTag(); NewSolverTag != CurrentActiveSolverTag)
+				{
+					// Solver is changing into some different sub-mode.
+					OnSolverChangedMode(NewSolverTag, CurrentActiveSolverTag);
+					CurrentActiveSolverTag = NewSolverTag;
+				}
+			}
+			else
+			{
+				OnSolverChangedMode(FGameplayTag::EmptyTag, CurrentActiveSolverTag);
+				CurrentActiveSolverTag = FGameplayTag::EmptyTag;
+			}
+		}
+		else
+		{
+			// No valid solver available. Bail.
+			SetMovementMode(EGMC_MovementMode::Airborne);
+		}
+		return;
+	}
+	
 	
 	Super::PhysicsCustom_Implementation(DeltaSeconds);
 }
@@ -444,6 +555,17 @@ void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 	}
 
 	Super::CalculateVelocity(DeltaSeconds);
+}
+
+UPrimitiveComponent* UGMCE_OrganicMovementCmp::FindActorBase_Implementation()
+{
+	if (GetMovementMode() == GetSolverMovementMode() && CurrentActiveSolver)
+	{
+		FSolverState State = GetSolverState();
+		SolverAppliedBase = CurrentActiveSolver->GetSolverBase(State);
+		if (SolverAppliedBase) return SolverAppliedBase;
+	}
+	return Super::FindActorBase_Implementation();
 }
 
 void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
@@ -986,6 +1108,117 @@ void UGMCE_OrganicMovementCmp::SetRagdollActive(bool bActive)
 	bEnablePhysicsInteraction = !bActive;
 	bFirstRagdollTick = bActive;
 	bResetMesh = !bActive;
+}
+
+void UGMCE_OrganicMovementCmp::RunSolvers(float DeltaTime)
+{
+	FSolverState State = GetSolverState();
+	State.AvailableSolvers.Reset();
+	
+	for (const auto& Solver : Solvers)
+	{
+		if (Solver->RunSolver(State, DeltaTime))
+		{
+			// ???
+		}
+	}
+
+	AvailableSolvers = State.AvailableSolvers;	
+}
+
+bool UGMCE_OrganicMovementCmp::ShouldDebugSolver(const FGameplayTag& SolverTag) const
+{
+#if WITH_EDITOR && ENABLE_DRAW_DEBUG
+	return DebugSolvers.HasTag(SolverTag);
+#else
+	return false;
+#endif
+}
+
+bool UGMCE_OrganicMovementCmp::IsSolutionAvailableForSolver(FGameplayTag SolverTag) const
+{
+	return AvailableSolvers.HasTag(SolverTag);	
+}
+
+UGMCE_BaseSolver* UGMCE_OrganicMovementCmp::GetActiveSolver()
+{
+	if (GetMovementMode() != GetSolverMovementMode() || !CurrentActiveSolverTag.IsValid())
+	{
+		CurrentActiveSolver = nullptr;
+		return nullptr;
+	}
+
+	if (!CurrentActiveSolver || !CurrentActiveSolverTag.MatchesTag(CurrentActiveSolver->GetTag()))
+	{
+		// Refresh our cached solver.
+		for (const auto& Solver : Solvers)
+		{
+			if (CurrentActiveSolverTag.MatchesTag(Solver->GetTag()))
+			{
+				CurrentActiveSolver = Solver;
+				break;
+			}
+		}
+	}
+
+	return CurrentActiveSolver;	
+}
+
+UGMCE_BaseSolver* UGMCE_OrganicMovementCmp::GetSolverForTag(FGameplayTag SolverTag) const
+{
+	if (!SolverTag.IsValid()) return nullptr;
+
+	for (const auto& Solver : Solvers)
+	{
+		if (SolverTag.MatchesTag(Solver->GetTag()))
+		{
+			return Solver;
+		}
+	}
+
+	return nullptr;	
+}
+
+bool UGMCE_OrganicMovementCmp::TryActivateSolver(const FGameplayTag& SolverTag)
+{
+	if (!SolverTag.IsValid())
+	{
+		OnSolverChangedMode(FGameplayTag::EmptyTag, CurrentActiveSolverTag);
+		CurrentActiveSolverTag = FGameplayTag::EmptyTag;
+		CurrentActiveSolver = nullptr;
+		return true;
+	}
+	
+	if (AvailableSolvers.HasTag(SolverTag))
+	{
+		for (const auto& Solver : Solvers)
+		{
+			if (SolverTag.MatchesTag(Solver->GetTag()))
+			{
+				FGameplayTag OldMode = CurrentActiveSolverTag;
+				CurrentActiveSolverTag = Solver->GetPreferredSolverTag();
+				OnSolverChangedMode(CurrentActiveSolverTag, OldMode);
+				return true;
+			}
+		}
+	}
+
+	return false;	
+}
+
+FSolverState UGMCE_OrganicMovementCmp::GetSolverState() const
+{
+	FSolverState State;
+	State.Location = GetActorLocation_GMC();
+	State.Rotation = GetActorRotation_GMC();
+	State.LinearVelocity = GetLinearVelocity_GMC();
+	State.MovementMode = GetMovementMode();
+	State.MovementTag = CurrentActiveSolverTag;
+	State.RawInput = RawInputVector;
+	State.ProcessedInput = ProcessedInputVector;
+	State.AvailableSolvers = AvailableSolvers;
+
+	return State;	
 }
 
 

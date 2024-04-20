@@ -4,12 +4,15 @@
 #include "GMCE_CoreComponent.h"
 #include "GMCOrganicMovementComponent.h"
 #include "Containers/RingBuffer.h"
+#include "Solvers/GMCE_BaseSolver.h"
 #include "Support/GMCEMovementSample.h"
 #include "GMCE_OrganicMovementCmp.generated.h"
 
 DECLARE_DELEGATE_RetVal_ThreeParams(FTransform, FOnProcessRootMotion, const FTransform&, UGMCE_OrganicMovementCmp*, float)
 DECLARE_DELEGATE_TwoParams(FOnSyncDataApplied, const FGMC_PawnState&, EGMC_NetContext)
 DECLARE_DELEGATE(FOnBindReplicationData)
+
+class UGMCE_BaseSolver;
 
 UCLASS(ClassGroup=(GMCExtended), meta=(BlueprintSpawnableComponent, DisplayName="GMCExtended Organic Movement Component"))
 class GMCEXTENDED_API UGMCE_OrganicMovementCmp : public UGMCE_CoreComponent
@@ -31,6 +34,8 @@ public:
 
 	// GMC Overrides
 	virtual void BindReplicationData_Implementation() override;
+	virtual FVector PreProcessInputVector_Implementation(FVector InRawInputVector) override;
+	virtual void PreMovementUpdate_Implementation(float DeltaSeconds) override;
 	virtual void MovementUpdate_Implementation(float DeltaSeconds) override;
 	virtual void GenSimulationTick_Implementation(float DeltaTime) override;
 	virtual void GenAncillaryTick_Implementation(float DeltaTime, bool bLocalMove, bool bCombinedClientMove) override;
@@ -41,6 +46,8 @@ public:
 	virtual void PhysicsCustom_Implementation(float DeltaSeconds) override;
 	virtual float GetInputAccelerationCustom_Implementation() const override;
 	virtual void CalculateVelocity(float DeltaSeconds) override;
+
+	virtual UPrimitiveComponent* FindActorBase_Implementation() override;
 
 	virtual void ApplyRotation(bool bIsDirectBotMove, const FGMC_RootMotionVelocitySettings& RootMotionMetaData, float DeltaSeconds) override;
 
@@ -391,5 +398,68 @@ private:
 	float PreviousCollisionHalfHeight { 0.f };
 	
 #pragma endregion
-		
+
+	// Solvers
+#pragma region Solvers
+public:
+
+	UFUNCTION(BlueprintCallable, Category="Parcore|Solvers")
+	void RunSolvers(float DeltaTime);
+
+	bool ShouldDebugSolver(const FGameplayTag& SolverTag) const;
+	
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Parcore|Solvers")
+	bool IsSolutionAvailableForSolver(FGameplayTag SolverTag) const;
+
+	UFUNCTION(BlueprintCallable, Category="Parcore|Solvers")
+	UGMCE_BaseSolver* GetActiveSolver();
+
+	UFUNCTION(BlueprintCallable, Category="Parcore|Solvers")
+	UGMCE_BaseSolver* GetSolverForTag(FGameplayTag SolverTag) const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Parcore|Solvers")
+	FGameplayTag GetActiveSolverTag() const { return CurrentActiveSolverTag; }
+	
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Parcore|Solvers")
+	virtual EGMC_MovementMode GetSolverMovementMode() const { return EGMC_MovementMode::Custom2; }
+
+	UFUNCTION(BlueprintCallable, Category="Parcore|Solvers")
+	bool TryActivateSolver(const FGameplayTag& SolverTag);
+
+	FSolverState GetSolverState() const;
+
+	virtual void OnSolverChangedMode(FGameplayTag NewMode, FGameplayTag OldMode) {};
+
+protected:
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Solvers")
+	TArray<TSubclassOf<UGMCE_BaseSolver>> SolverClasses {};
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Instanced, Category="Solvers")
+	TArray<TObjectPtr<UGMCE_BaseSolver>> Solvers {};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Solvers")
+	FGameplayTagContainer DebugSolvers;
+	
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Solvers")
+	FGameplayTagContainer AvailableSolvers;
+	int32 BI_AvailableSolvers { -1 };
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Solvers")
+	FGameplayTag CurrentActiveSolverTag;
+	int32 BI_CurrentActiveSolverTag { -1 };
+
+	UPROPERTY()
+	TObjectPtr<UGMCE_BaseSolver> CurrentActiveSolver;
+
+	UPROPERTY()
+	UPrimitiveComponent* SolverAppliedBase { nullptr };
+	
+private:
+
+	
+	
+
+#pragma endregion
+	
 };
