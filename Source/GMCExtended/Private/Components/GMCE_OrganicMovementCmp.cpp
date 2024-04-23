@@ -531,16 +531,23 @@ void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 	// moving, we want to check the direction we're TRYING to move and see if we're offset at all.
 	if (bRequireFacingBeforeMove && IsMovingOnGround() && Velocity.IsNearlyZero())
 	{
-		// We have to use the input vector instead of the 
-		const FVector InputDirection = GetProcessedInputVector();
+		// We have to use the input vector instead of the velocity.
+		FVector InputDirection = GetProcessedInputVector();
+		bool bFinishTurn = false;
+		if (InputDirection.IsNearlyZero())
+		{
+			InputDirection = TurnToDirection;
+			bFinishTurn = true;
+		}
 		const float VelocityAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(InputDirection, UpdatedComponent->GetForwardVector()));
 
 		// If our velocity is less than our threshold angle, we can move normally. Otherwise, we'll want to just
 		// turn-in-place instead.
-		if (VelocityAngle > FacingAngleOffsetThreshold)
+		if (VelocityAngle > FacingAngleOffsetThreshold || bFinishTurn)
 		{
 			// We're not calling our parent implementation, and we're not moving until we're within our angle threshold.
 			Velocity = FVector::ZeroVector;
+			TurnToDirection = (VelocityAngle < FacingAngleOffsetThreshold) ? FVector::ZeroVector : InputDirection;
 		
 			if (bUseSafeRotations)
 			{
@@ -555,6 +562,22 @@ void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 	}
 
 	Super::CalculateVelocity(DeltaSeconds);
+}
+
+void UGMCE_OrganicMovementCmp::RotateYawTowardsDirection(const FVector& Direction, float Rate, float DeltaTime)
+{
+	Super::RotateYawTowardsDirection(Direction, Rate, DeltaTime);
+
+	CalculateAimYawRemaining(Direction);
+}
+
+bool UGMCE_OrganicMovementCmp::RotateYawTowardsDirectionSafe(const FVector& Direction, float Rate, float DeltaTime)
+{
+	const bool bResult = Super::RotateYawTowardsDirectionSafe(Direction, Rate, DeltaTime);
+
+	CalculateAimYawRemaining(Direction);
+	
+	return bResult;
 }
 
 UPrimitiveComponent* UGMCE_OrganicMovementCmp::FindActorBase_Implementation()
@@ -712,6 +735,20 @@ void UGMCE_OrganicMovementCmp::UpdateAnimationHelperValues(float DeltaSeconds)
 
 	CurrentAnimationAcceleration = (Velocity - LastAnimationVelocity) / DeltaSeconds;
 	LastAnimationVelocity = Velocity;
+}
+
+void UGMCE_OrganicMovementCmp::CalculateAimYawRemaining(const FVector& DirectionVector)
+{
+	if (DirectionVector.IsNearlyZero())
+	{
+		AimYawRemaining = 0.f;
+		return;
+	}
+
+	const FVector RotationDirection = UKismetMathLibrary::Conv_RotatorToVector(GetActorRotation_GMC());
+	const FVector Cross = RotationDirection.Cross(DirectionVector);
+	AimYawRemaining = FMath::Abs(UKismetMathLibrary::NormalizeAxis(UKismetMathLibrary::DegAcos(RotationDirection.Dot(DirectionVector))));
+	if (Cross.Z < 0.f) AimYawRemaining *= -1.f;
 }
 #pragma endregion
 

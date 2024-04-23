@@ -47,6 +47,9 @@ public:
 	virtual float GetInputAccelerationCustom_Implementation() const override;
 	virtual void CalculateVelocity(float DeltaSeconds) override;
 
+	virtual void RotateYawTowardsDirection(const FVector& Direction, float Rate, float DeltaTime) override;
+	virtual bool RotateYawTowardsDirectionSafe(const FVector& Direction, float Rate, float DeltaTime) override;
+
 	virtual UPrimitiveComponent* FindActorBase_Implementation() override;
 
 	virtual void ApplyRotation(bool bIsDirectBotMove, const FGMC_RootMotionVelocitySettings& RootMotionMetaData, float DeltaSeconds) override;
@@ -78,6 +81,8 @@ public:
 	/// this many degrees off from the current 'forward' direction, they will rotate until they are within
 	/// this threshold of their movement direction before they begin moving forward.
 	float FacingAngleOffsetThreshold { 25.f };
+
+	FVector TurnToDirection { 0.f };
 	
 	// Utilities
 
@@ -96,6 +101,7 @@ protected:
 	virtual void OnSyncDataApplied_Implementation(const FGMC_PawnState& State, EGMC_NetContext Context) override;
 
 	void UpdateAnimationHelperValues(float DeltaSeconds);
+	void CalculateAimYawRemaining(const FVector& DirectionVector);
 	
 public:
 	FRotator GetCurrentAimRotation() const { return CurrentAimRotation; }
@@ -107,6 +113,8 @@ public:
 	float GetCurrentComponentYawRate() const { return CurrentComponentYawRate; }
 
 	FVector GetCurrentAnimationAcceleration() const { return CurrentAnimationAcceleration; }
+
+	float GetAimYawRemaining() const { return AimYawRemaining; }
 	
 	FOnProcessRootMotion ProcessRootMotionPreConvertToWorld;
 	FOnSyncDataApplied OnSyncDataAppliedDelegate;
@@ -121,6 +129,9 @@ protected:
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	float CurrentAimYawRate { 0.f };
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	float AimYawRemaining { 0.f };
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	FRotator CurrentComponentRotation { FRotator::ZeroRotator };

@@ -62,6 +62,9 @@ protected:
 	float AimYawDeltaRate { 0.f };
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Character|State")
+	float AimYawRemaining { 0.f };
+	
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Character|State")
 	float ComponentYawDeltaRate { 0.f };
 	
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Character|State")
