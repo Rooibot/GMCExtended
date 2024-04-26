@@ -82,7 +82,20 @@ public:
 	/// this threshold of their movement direction before they begin moving forward.
 	float FacingAngleOffsetThreshold { 25.f };
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Operation")
+	/// If this is a non-zero positive number and bOrientToControlRotationDirection is true, we will wait
+	/// this many seconds before we turn-in-place when velocity is zero.
+	float TurnInPlaceDelay { 0.f };
+
+	float TurnInPlaceSecondsAccumulated { 0.f };
+	FVector TurnInPlaceDelayedDirection { 0.f };
+	
 	FVector TurnToDirection { 0.f };
+
+	UFUNCTION(BlueprintCallable, Category="Movement")
+	void SetStrafingMovement(bool bStrafingEnabled = false);
+
+	void HandleTurnInPlace(float DeltaSeconds);
 	
 	// Utilities
 

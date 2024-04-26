@@ -528,40 +528,59 @@ float UGMCE_OrganicMovementCmp::GetInputAccelerationCustom_Implementation() cons
 void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 {
 	// If we're using "Require Facing Before Move" and we're on the ground and we're not currently
-	// moving, we want to check the direction we're TRYING to move and see if we're offset at all.
+	// moving, we want to check the direction we're TRYING to face and see if we're offset at all.
 	if (bRequireFacingBeforeMove && IsMovingOnGround() && Velocity.IsNearlyZero())
 	{
-		// We have to use the input vector instead of the velocity.
-		FVector InputDirection = GetProcessedInputVector();
-		bool bFinishTurn = false;
-		if (InputDirection.IsNearlyZero())
+		if (bOrientToControlRotationDirection)
 		{
-			InputDirection = TurnToDirection;
-			bFinishTurn = true;
+			FVector ControlDirection = GetControllerRotation_GMC().Vector();
+			const float ControlAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(ControlDirection, UpdatedComponent->GetForwardVector()));
+			if (ControlAngle > FacingAngleOffsetThreshold)
+			{
+				Velocity = FVector::ZeroVector;
+				HandleTurnInPlace(DeltaSeconds);
+				return;
+			}
 		}
-		const float VelocityAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(InputDirection, UpdatedComponent->GetForwardVector()));
-
-		// If our velocity is less than our threshold angle, we can move normally. Otherwise, we'll want to just
-		// turn-in-place instead.
-		if (VelocityAngle > FacingAngleOffsetThreshold || bFinishTurn)
+		else
 		{
-			// We're not calling our parent implementation, and we're not moving until we're within our angle threshold.
-			Velocity = FVector::ZeroVector;
-			TurnToDirection = (VelocityAngle < FacingAngleOffsetThreshold) ? FVector::ZeroVector : InputDirection;
+			FVector InputDirection = GetProcessedInputVector();
+			bool bFinishTurn = false;
+			if (InputDirection.IsNearlyZero())
+			{
+				InputDirection = TurnToDirection;
+				bFinishTurn = true;
+			}
+			const float VelocityAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(InputDirection, UpdatedComponent->GetForwardVector()));
+
+			// If our velocity is less than our threshold angle, we can move normally. Otherwise, we'll want to just
+			// turn-in-place instead.
+			if (VelocityAngle > FacingAngleOffsetThreshold || bFinishTurn)
+			{
+				// We're not calling our parent implementation, and we're not moving until we're within our angle threshold.
+				Velocity = FVector::ZeroVector;
+				TurnToDirection = (VelocityAngle < FacingAngleOffsetThreshold) ? FVector::ZeroVector : InputDirection;
 		
-			if (bUseSafeRotations)
-			{
-				RotateYawTowardsDirectionSafe(InputDirection, RotationRate, DeltaSeconds);
+				if (bUseSafeRotations)
+				{
+					RotateYawTowardsDirectionSafe(InputDirection, RotationRate, DeltaSeconds);
+				}
+				else
+				{
+					RotateYawTowardsDirection(InputDirection, RotationRate, DeltaSeconds);
+				}
+				return;
 			}
-			else
-			{
-				RotateYawTowardsDirection(InputDirection, RotationRate, DeltaSeconds);
-			}
-			return;
 		}
 	}
 
 	Super::CalculateVelocity(DeltaSeconds);
+
+	if (!Velocity.IsNearlyZero())
+	{
+		TurnInPlaceSecondsAccumulated = 0.f;
+		TurnInPlaceDelayedDirection = FVector::ZeroVector;
+	}
 }
 
 void UGMCE_OrganicMovementCmp::RotateYawTowardsDirection(const FVector& Direction, float Rate, float DeltaTime)
@@ -616,6 +635,12 @@ void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
 		{
 			RotateYawTowardsDirection(OrientTowards, RotationRate, DeltaSeconds);
 		}
+		return;
+	}
+
+	if (bOrientToControlRotationDirection && TurnInPlaceDelay > 0.f && Velocity.IsNearlyZero() && (!HasRootMotion() || RootMotionMetaData.bApplyRotationWithRootMotion))
+	{
+		HandleTurnInPlace(DeltaSeconds);
 		return;
 	}
 
@@ -1258,6 +1283,45 @@ FSolverState UGMCE_OrganicMovementCmp::GetSolverState() const
 	return State;	
 }
 
+
+void UGMCE_OrganicMovementCmp::SetStrafingMovement(bool bStrafingEnabled)
+{
+	bOrientToVelocityDirection = !bStrafingEnabled;
+	bOrientToInputDirection = !bStrafingEnabled;
+	bOrientToControlRotationDirection = bStrafingEnabled;
+}
+
+void UGMCE_OrganicMovementCmp::HandleTurnInPlace(float DeltaSeconds)
+{
+	const float ControllerAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(TurnInPlaceDelayedDirection, UpdatedComponent->GetForwardVector()));
+	if (ControllerAngle >= FacingAngleOffsetThreshold || !TurnInPlaceDelayedDirection.IsZero())
+	{
+		TurnInPlaceSecondsAccumulated += DeltaSeconds;
+			
+		if (TurnInPlaceSecondsAccumulated >= TurnInPlaceDelay || IsInputPresent())
+		{
+			if (TurnInPlaceDelayedDirection.IsZero() || IsInputPresent())
+			{
+				TurnInPlaceDelayedDirection = GetControllerRotation_GMC().Vector();
+			}
+			
+			if (bUseSafeRotations)
+			{
+				RotateYawTowardsDirectionSafe(TurnInPlaceDelayedDirection, RotationRate, DeltaSeconds);				
+			}
+			else
+			{
+				RotateYawTowardsDirection(TurnInPlaceDelayedDirection, RotationRate, DeltaSeconds);
+			}
+
+			if (ControllerAngle < 2.f)
+			{
+				TurnInPlaceSecondsAccumulated = 0.f;
+				TurnInPlaceDelayedDirection = FVector::ZeroVector;
+			}
+		}
+	}
+}
 
 void UGMCE_OrganicMovementCmp::EnableTrajectoryDebug(bool bEnabled)
 {

@@ -71,6 +71,8 @@ void UGMCE_BaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	InputAcceleration = InputVector * MovementComponent->GetInputAcceleration();
 
 	AimOffset = UKismetMathLibrary::NormalizedDeltaRotator(AimRotation, WorldRotation);
+
+	bTurnInPlace = (AimYawRemaining != 0.f) && WorldVelocity.IsNearlyZero();
 	
 	if (GetWorld()->IsGameWorld())
 	{
