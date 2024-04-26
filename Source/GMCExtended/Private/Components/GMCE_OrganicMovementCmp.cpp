@@ -770,10 +770,7 @@ void UGMCE_OrganicMovementCmp::CalculateAimYawRemaining(const FVector& Direction
 		return;
 	}
 
-	const FVector RotationDirection = UKismetMathLibrary::Conv_RotatorToVector(GetActorRotation_GMC());
-	const FVector Cross = RotationDirection.Cross(DirectionVector);
-	AimYawRemaining = FMath::Abs(UKismetMathLibrary::NormalizeAxis(UKismetMathLibrary::DegAcos(RotationDirection.Dot(DirectionVector))));
-	if (Cross.Z < 0.f) AimYawRemaining *= -1.f;
+	AimYawRemaining = UKismetMathLibrary::FindRelativeLookAtRotation(GetActorTransform(), GetActorLocation_GMC() + DirectionVector).Yaw;
 }
 #pragma endregion
 
@@ -1302,7 +1299,7 @@ void UGMCE_OrganicMovementCmp::HandleTurnInPlace(float DeltaSeconds)
 		{
 			if (TurnInPlaceDelayedDirection.IsZero() || IsInputPresent())
 			{
-				TurnInPlaceDelayedDirection = GetControllerRotation_GMC().Vector();
+				TurnInPlaceDelayedDirection = GetControllerRotation_GMC().Vector() * FVector(1.f, 1.f, 0.f);
 			}
 			
 			if (bUseSafeRotations)
