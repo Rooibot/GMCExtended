@@ -101,7 +101,7 @@ void UGMCE_RootMotionModifier::Update(const FGMCE_MotionWarpContext& Context)
 		// in the animation can still be used.
 		if (!FMath::IsNearlyZero(FMath::Abs(ActualDelta - ExpectedDelta), KINDA_SMALL_NUMBER))
 		{
-			UE_LOG(LogGMCExAnimation, Verbose, TEXT("Motion Warping: marking modifier for removal as playback has been shifted outside the window. %s: %s expected delta %f received %d"),
+			UE_LOG(LogGMCExAnimation, Verbose, TEXT("Motion Warping: marking modifier for removal as playback has been shifted outside the window. %s: %s expected delta %f received %f"),
 				*GetNameSafe(GetPawnOwner()), *GetNameSafe(AnimationSequence.Get()), ExpectedDelta, ActualDelta);
 
 			SetState(EGMCE_RootMotionModifierState::MarkedForRemoval);

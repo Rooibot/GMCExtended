@@ -37,7 +37,7 @@ struct FGMCE_MotionWarpContext
 };
 
 UENUM(BlueprintType)
-enum class EGMCE_RootMotionModifierState
+enum class EGMCE_RootMotionModifierState : uint8
 {
 	Waiting,
 	Active,
