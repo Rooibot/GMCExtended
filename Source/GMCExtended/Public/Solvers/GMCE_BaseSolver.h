@@ -14,33 +14,33 @@ struct GMCEXTENDED_API FSolverState
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
 	bool bIsPrediction { false };
 	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
 	EGMC_MovementMode MovementMode { EGMC_MovementMode::Grounded };
 	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
 	FGameplayTag MovementTag { FGameplayTag::EmptyTag };
 	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
 	FVector Location { 0.f };
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
 	FRotator Rotation { 0.f };
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
 	FVector LinearVelocity { 0.f };
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
 	FVector RawInput { 0.f };
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
 	FVector ProcessedInput { 0.f };
 
 	// -- Values below here can be changed by a solver and will be acted on.
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Solver State")
 	FGameplayTagContainer AvailableSolvers { };
 	
 };
@@ -59,7 +59,7 @@ public:
 
 	void SetupSolverInternal(UGMCE_OrganicMovementCmp* MovementComponent);
 	
-	UFUNCTION(BlueprintCallable, BlueprintPure)
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="GMC Extended|Solvers")
 	FGameplayTag GetTag() const { return SolverMovementModeTag; }
 
 	/**
@@ -118,13 +118,13 @@ public:
 protected:
 
 	// Visualization helpers.
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Debug")
 	void DrawDebugConnector(const FVector& StartPoint, const FVector& EndPoint, const FColor& Color, float SphereRadius, float LineThickness) const;
 
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Debug")
 	void DrawDebugPointNormal(const FVector& Point, const FVector& Normal, const FColor& Color, float SphereRadius, float LineThickness) const;
 
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Debug")
 	void DrawDebugPointAngle(const FVector& Point, const FVector& Direction1, const FVector& Direction2, const FColor& Color, float SphereRadius, float LineThickness) const;
 	
 	// ------ NATIVE
@@ -171,13 +171,13 @@ public:
 	 * Called by Parcore when the movement component is ready, to allow a solver to setup any initial state it might
 	 * need.
 	 */
-	UFUNCTION(BlueprintImplementableEvent, DisplayName="Initialize Solver")
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Initialize Solver", Category="GMC Extended|Solvers")
 	void BlueprintInitializeSolver();
 
-	UFUNCTION(BlueprintImplementableEvent, DisplayName="Get Preferred Solver Tag")
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Get Preferred Solver Tag", Category="GMC Extended|Solvers")
 	void BlueprintGetPreferredSolverTag(UPARAM(DisplayName="Preferred Tag") FGameplayTag& OutTag);
 
-	UFUNCTION(BlueprintImplementableEvent, DisplayName="Get Actor Base")
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Get Actor Base", Category="GMC Extended|Solvers")
 	void BlueprintGetSolverBase(UPARAM(ref) FSolverState& State, UPARAM(DisplayName="New Actor Base") UPrimitiveComponent*& Component);
 	
 	/**
@@ -185,14 +185,14 @@ public:
 	 * @param State Current Parcore state
 	 * @param OutResult true if the solver can take control of movement, false otherwise.
 	 */
-	UFUNCTION(BlueprintImplementableEvent, DisplayName="Run Solver")
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Run Solver", Category="GMC Extended|Solvers")
 	void BlueprintRunSolver(UPARAM(ref) FSolverState& State, float DeltaTime, UPARAM(DisplayName="Offer control") bool& OutResult);
 
 	/**
 	 * Blueprint implementation of PreProcessInput.
 	 * @param State Current Parcore state
 	 */
-	UFUNCTION(BlueprintImplementableEvent, DisplayName="Pre-Process Input")
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Pre-Process Input", Category="GMC Extended|Solvers")
 	void BlueprintPreProcessInput(UPARAM(ref) FSolverState& State);
 
 	/**
@@ -201,7 +201,7 @@ public:
 	 * @param DeltaTime The time since the last movement action.
 	 * @param OutResult Set this to true to retain control, false otherwise.
 	 */
-	UFUNCTION(BlueprintImplementableEvent, DisplayName="Perform Movement")
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Perform Movement", Category="GMC Extended|Solvers")
 	void BlueprintPerformMovement(UPARAM(ref) FSolverState& State, float DeltaTime, UPARAM(DisplayName="Retain control") bool& OutResult);
 	
 	UGMCE_OrganicMovementCmp* GetMovementComponent() const { return MovementComponent; }
@@ -210,16 +210,16 @@ public:
 	
 protected:
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly);
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Solver");
 	bool bUseBlueprintEvents { true };
 	
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly)
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Solver")
 	bool bIsDebugActive { false };
 	
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly)
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Solver")
 	TObjectPtr<UGMCE_OrganicMovementCmp> MovementComponent;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, DisplayName="Movement Tag");
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, DisplayName="Movement Tag", Category="Solver");
 	FGameplayTag SolverMovementModeTag;
 	
 };

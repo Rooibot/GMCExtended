@@ -10,32 +10,32 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 {
 	GENERATED_BODY()
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
 	float AccumulatedSeconds { 0.f };
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
 	FTransform RelativeTransform { FTransform::Identity };
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
 	FVector RelativeLinearVelocity { 0.f };
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
 	FTransform WorldTransform { FTransform::Identity };
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
 	FVector WorldLinearVelocity { 0.f };
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
 	FRotator ActorWorldRotation { FRotator::ZeroRotator };
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
 	FRotator ActorDeltaRotation { FRotator::ZeroRotator };
 
 	/// Used only when displaying the debug trajectory. This is not fenced by
 	/// WITH_EDITORDATA_ONLY checks so that the value can be set in other code
 	/// without being conditional, but it will only be USED when debugging in
 	/// the editor.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trajectory")
 	bool bUseAsMarker { false };
 
 	FGMCE_MovementSample(const FTransform& TransformWorldSpace, const FVector& LinearVelocity)
@@ -167,7 +167,7 @@ struct GMCEXTENDED_API FGMCE_MovementSampleCollection
 {
 	GENERATED_BODY()
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
 	TArray<FGMCE_MovementSample> Samples;
 
 	void DrawDebug(const UWorld* World, const FTransform& FromOrigin, const FColor& PastColor = FColor::Blue,

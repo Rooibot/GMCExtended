@@ -36,7 +36,7 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Character")
 	TObjectPtr<UGMCE_OrganicMovementCmp> MovementComponent;
 
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly)
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Default")
 	bool bIsFirstUpdate { true };
 	
 	// Character Movement State

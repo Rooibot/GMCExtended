@@ -140,19 +140,19 @@ public:
 	 * server values will be replicated to the client.
 	 * @param Target The motion warp target to add.
 	 */
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Motion Warping")
 	void AddOrUpdateWarpTarget(UPARAM(ref) FGMCE_MotionWarpTarget& Target);
 
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Motion Warping")
 	void AddOrUpdateWarpTargetFromTransform(FName WarpTargetName, FTransform TargetTransform);
 
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Motion Warping")
 	void AddOrUpdateWarpTargetFromComponent(FName WarpTargetName, USceneComponent* Component, FName BoneName, bool bFollowComponent);
 
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Motion Warping")
 	void AddOrUpdateWarpTargetFromLocation(FName WarpTargetName, FVector Location);
 
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Motion Warping")
 	void AddOrUpdateWarpTargetFromLocationAndRotation(FName WarpTargetName, FVector Location, FRotator Rotation);
 
 	FORCEINLINE const FGMCE_MotionWarpTarget* FindWarpTarget(const FName& WarpTargetName) const 
@@ -164,16 +164,16 @@ public:
 	 * Removes a warp target, if a matching one exists. When called on server, will replicate the operation to the client.
 	 * @param Target The motion warp target to remove (or at least, a target containing the correct name).
 	 */
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Motion Warping")
 	void RemoveWarpTarget(UPARAM(ref) FGMCE_MotionWarpTarget& Target);
 
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Motion Warping")
 	void RemoveWarpTargetByName(FName Name);
 
 	/**
 	 * Removes all current motion warp targets. When called on the server, will replicate the operation to the client.
 	 */
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Motion Warping")
 	void RemoveAllWarpTargets();
 
 	FORCEINLINE const TArray<UGMCE_RootMotionModifier*>& GetModifiers() const { return Modifiers; }
@@ -182,7 +182,7 @@ public:
 
 	int32 AddModifier(UGMCE_RootMotionModifier* Modifier);
 
-	UFUNCTION(BlueprintCallable, Category="Motion Warping")
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Motion Warping")
 	void DisableAllRootMotionModifiers();
 
 	UGMCE_RootMotionModifier* AddModifierFromTemplate(UGMCE_RootMotionModifier* Template, const UAnimSequenceBase* Animation, float StartTime, float EndTime);
@@ -202,10 +202,10 @@ protected:
 	// applies it.
 	virtual FTransform ProcessRootMotion(const FTransform& InTransform, UGMCE_OrganicMovementCmp* MovementComponent, float DeltaSeconds);
 	
-	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, AdvancedDisplay)
+	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, AdvancedDisplay, Category="Motion Warping")
 	UGMCE_OrganicMovementCmp* MovementComponent;
 
-	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, AdvancedDisplay)
+	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, AdvancedDisplay, Category="Motion Warping")
 	AGMC_Pawn* OwningPawn;
 	
 	class IGMCE_MotionWarpSubject* MotionWarpSubject;
