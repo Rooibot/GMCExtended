@@ -1,8 +1,6 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
-#include "..\Support\GMCE_DeltaArray.h"
-#include "Net/Serialization/FastArraySerializer.h"
 #include "GMCE_MotionWarpTarget.generated.h"
 
 /**
