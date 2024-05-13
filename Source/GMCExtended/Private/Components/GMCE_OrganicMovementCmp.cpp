@@ -160,7 +160,16 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 		
 		if (bTrajectoryEnabled)
 		{
-			PredictedTrajectory.DrawDebug(GetWorld(), GetPawnOwner()->GetActorTransform());
+			FTransform OriginTransform;
+			if (bTrajectoryUsesMesh)
+			{
+				OriginTransform = SkeletalMesh->GetComponentTransform();
+			}
+			else
+			{
+				OriginTransform = UpdatedComponent->GetComponentTransform();
+			}
+			PredictedTrajectory.DrawDebug(GetWorld(), OriginTransform);
 		}
 	}
 #endif
@@ -1016,14 +1025,35 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 
 void UGMCE_OrganicMovementCmp::UpdateTrajectoryPrediction()
 {
-	PredictedTrajectory = PredictMovementFuture(GetPawnOwner()->GetActorTransform(), true);	
+	FTransform OriginTransform;
+	if (bTrajectoryUsesMesh)
+	{
+		OriginTransform = SkeletalMesh->GetComponentTransform();
+	}
+	else
+	{
+		OriginTransform = UpdatedComponent->GetComponentTransform();
+	}
+	PredictedTrajectory = PredictMovementFuture(OriginTransform, true);	
 }
 
 FGMCE_MovementSample UGMCE_OrganicMovementCmp::GetMovementSampleFromCurrentState() const
 {
-	FTransform CurrentTransform = GetPawnOwner()->GetActorTransform();
-	const FVector CurrentLocation = GetLowerBound();
-	CurrentTransform.SetLocation(CurrentLocation);
+	// FTransform CurrentTransform = GetPawnOwner()->GetActorTransform();
+	// const FVector CurrentLocation = GetLowerBound();
+	// CurrentTransform.SetLocation(CurrentLocation);
+
+	FTransform CurrentTransform;
+	if (bTrajectoryUsesMesh)
+	{
+		CurrentTransform = SkeletalMesh->GetComponentTransform();
+	}
+	else
+	{
+		CurrentTransform = GetPawnOwner()->GetActorTransform();
+		const FVector CurrentLocation = GetLowerBound();
+		CurrentTransform.SetLocation(CurrentLocation);
+	}
 
 	FGMCE_MovementSample Result = FGMCE_MovementSample(CurrentTransform, GetLinearVelocity_GMC());
 	Result.ActorWorldRotation = GetPawnOwner()->GetActorRotation();

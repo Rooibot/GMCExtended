@@ -308,6 +308,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory|Precalculations")
 	bool bPrecalculateFutureTrajectory { true };
 
+	/// If true, trajectory will be calculated based on the character's skeletal mesh (if possible) rather than the
+	/// root component.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory")
+    bool bTrajectoryUsesMesh { true };
+
+	/// If true, trajectory will be calculated based on the controller rotation rather than the character rotation.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory")
+	bool bTrajectoryUsesControllerRotation { false };
+	
 	/// The maximum size of the trajectory sample history.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Movement Trajectory")
 	int32 MaxTrajectorySamples = { 200 };
