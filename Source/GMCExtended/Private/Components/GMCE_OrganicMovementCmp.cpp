@@ -391,6 +391,48 @@ void UGMCE_OrganicMovementCmp::OnMovementModeChangedSimulated_Implementation(EGM
 	Super::OnMovementModeChangedSimulated_Implementation(PreviousMovementMode);
 }
 
+float UGMCE_OrganicMovementCmp::GetMaxSpeed() const
+{
+	// If strafe speed limits are disabled or we're not on the ground, just stick with our normal value.
+	if (!bLimitStrafeSpeed || !IsMovingOnGround() ||
+		StrafeSpeedPoints.Num() <= 1 || GetLinearVelocity_GMC().IsNearlyZero()) return Super::GetMaxSpeed();
+
+	float StrafeAngle = FMath::Abs(GetLocomotionAngle());
+
+	float LimitedMaxSpeed = MaxDesiredSpeed;
+	float CurrentStartSpeed = MaxDesiredSpeed;
+	float MinAngle = 0.f;
+
+	if (StrafeAngle >= StrafeSpeedPoints.Last().AngleOffset)
+	{
+		// We're past the last breakpoint, not worth iterating.
+		LimitedMaxSpeed = MaxDesiredSpeed * StrafeSpeedPoints.Last().SpeedFactor;
+	}
+	else
+	{
+		for (int Idx = 0; Idx < StrafeSpeedPoints.Num(); Idx++)
+		{
+			const float MaxAngle = StrafeSpeedPoints[Idx].AngleOffset;
+			
+			if (StrafeAngle >= MinAngle && StrafeAngle <= MaxAngle)
+			{
+				// This is our breakpoint.
+				const float Range = MaxAngle - MinAngle;
+				const float Position = (StrafeAngle - MinAngle) / Range;
+
+				LimitedMaxSpeed = FMath::Lerp(CurrentStartSpeed, MaxDesiredSpeed * StrafeSpeedPoints[Idx].SpeedFactor, Position);
+				break;
+			}
+
+			CurrentStartSpeed = MaxDesiredSpeed * StrafeSpeedPoints[Idx].SpeedFactor;
+			MinAngle = MaxAngle;
+		}
+	}
+	
+	// If the analog input is less than our max speed anyway, use the lower value.
+	return FMath::Min(LimitedMaxSpeed, Super::GetMaxSpeed());
+}
+
 void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 {
 	if (GetMovementMode() == GetRagdollMode() && bShouldReplicateRagdoll)
@@ -1348,6 +1390,54 @@ void UGMCE_OrganicMovementCmp::HandleTurnInPlace(float DeltaSeconds)
 			}
 		}
 	}
+}
+
+float UGMCE_OrganicMovementCmp::CalculateDirection(const FVector& Direction, const FRotator& BaseRotation)
+{
+	if (!Direction.IsNearlyZero())
+	{
+		const FMatrix RotMatrix = FRotationMatrix(BaseRotation);
+		const FVector ForwardVector = RotMatrix.GetScaledAxis(EAxis::X);
+		const FVector RightVector = RotMatrix.GetScaledAxis(EAxis::Y);
+		const FVector NormalizedVel = Direction.GetSafeNormal2D();
+
+		// get a cos(alpha) of forward vector vs velocity
+		const float ForwardCosAngle = static_cast<float>(FVector::DotProduct(ForwardVector, NormalizedVel));
+		// now get the alpha and convert to degree
+		float ForwardDeltaDegree = FMath::RadiansToDegrees(FMath::Acos(ForwardCosAngle));
+
+		// depending on where right vector is, flip it
+		const float RightCosAngle = static_cast<float>(FVector::DotProduct(RightVector, NormalizedVel));
+		if (RightCosAngle < 0.f)
+		{
+			ForwardDeltaDegree *= -1.f;
+		}
+
+		return ForwardDeltaDegree;
+	}
+
+	return 0.f;
+}
+
+float UGMCE_OrganicMovementCmp::GetLocomotionAngle() const
+{
+	return CalculateDirection(GetLinearVelocity_GMC(), GetCurrentComponentRotation());
+}
+
+float UGMCE_OrganicMovementCmp::GetOrientationAngle() const
+{
+	float Angle = GetLocomotionAngle();
+
+	if (FMath::Abs(Angle) > 90.f)
+	{
+		Angle += 180.f;
+		if (Angle > 180.f)
+		{
+			Angle -= 360.f;
+		}
+	}
+
+	return Angle;
 }
 
 void UGMCE_OrganicMovementCmp::EnableTrajectoryDebug(bool bEnabled)

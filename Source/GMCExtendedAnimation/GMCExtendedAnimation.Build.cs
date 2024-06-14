@@ -13,7 +13,8 @@ public class GMCExtendedAnimation : ModuleRules
                 "Core",
                 "GMCCore",
                 "GMCExtended",
-                "StructUtils"
+                "StructUtils",
+                "AnimGraphRuntime"
             }
         );
 

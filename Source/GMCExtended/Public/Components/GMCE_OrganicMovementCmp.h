@@ -14,6 +14,18 @@ DECLARE_DELEGATE(FOnBindReplicationData)
 
 class UGMCE_BaseSolver;
 
+USTRUCT(BlueprintType)
+struct GMCEXTENDED_API FGMCE_SpeedMark
+{
+	GENERATED_BODY()
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", ClampMax="180", UIMin="0", UIMax="180"))
+	float AngleOffset;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0.1", ClampMax="1.0", UIMin="0.1", UIMax="1.0"))
+	float SpeedFactor;
+};
+
 UCLASS(ClassGroup=(GMCExtended), meta=(BlueprintSpawnableComponent, DisplayName="GMCExtended Organic Movement Component"))
 class GMCEXTENDED_API UGMCE_OrganicMovementCmp : public UGMCE_CoreComponent
 {
@@ -43,6 +55,8 @@ public:
 	virtual void OnMovementModeChanged_Implementation(EGMC_MovementMode PreviousMovementMode) override;
 	virtual void OnMovementModeChangedSimulated_Implementation(EGMC_MovementMode PreviousMovementMode) override;
 
+	virtual float GetMaxSpeed() const override;
+	
 	virtual void PhysicsCustom_Implementation(float DeltaSeconds) override;
 	virtual float GetInputAccelerationCustom_Implementation() const override;
 	virtual void CalculateVelocity(float DeltaSeconds) override;
@@ -96,9 +110,25 @@ public:
 	void SetStrafingMovement(bool bStrafingEnabled = false);
 
 	void HandleTurnInPlace(float DeltaSeconds);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Tempo")
+	/// If this is true, then if the movement direction differs from the character's forward vector
+	/// by more than a certain amount, the maximum speed will be reduced.
+	bool bLimitStrafeSpeed { false };
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Tempo", meta=(EditCondition="bLimitStrafeSpeed", EditConditionHides))
+	TArray<FGMCE_SpeedMark> StrafeSpeedPoints { { 45.f, 1.f }, { 120.f, 0.5f } };
 	
 	// Utilities
 
+	static float CalculateDirection(const FVector& Direction, const FRotator& Rotation);
+	
+	UFUNCTION(BlueprintCallable, Category="Movement")
+	float GetLocomotionAngle() const;
+
+	UFUNCTION(BlueprintCallable, Category="Movement")
+	float GetOrientationAngle() const;
+	
 	// Debug
 	
 	/// If called in a context where the DrawDebug calls are disabled, this function will do nothing.
