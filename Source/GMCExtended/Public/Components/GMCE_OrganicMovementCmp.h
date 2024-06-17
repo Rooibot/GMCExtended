@@ -8,7 +8,8 @@
 #include "Support/GMCEMovementSample.h"
 #include "GMCE_OrganicMovementCmp.generated.h"
 
-DECLARE_DELEGATE_RetVal_ThreeParams(FTransform, FOnProcessRootMotion, const FTransform&, UGMCE_OrganicMovementCmp*, float)
+// We append GMC to the delegate name because Epic decided to add an FOnProcessRootMotion to the CMC in 5.4.
+DECLARE_DELEGATE_RetVal_ThreeParams(FTransform, FOnProcessRootMotionGMC, const FTransform&, UGMCE_OrganicMovementCmp*, float)
 DECLARE_DELEGATE_TwoParams(FOnSyncDataApplied, const FGMC_PawnState&, EGMC_NetContext)
 DECLARE_DELEGATE(FOnBindReplicationData)
 
@@ -159,7 +160,7 @@ public:
 
 	float GetAimYawRemaining() const { return AimYawRemaining; }
 	
-	FOnProcessRootMotion ProcessRootMotionPreConvertToWorld;
+	FOnProcessRootMotionGMC ProcessRootMotionPreConvertToWorld;
 	FOnSyncDataApplied OnSyncDataAppliedDelegate;
 	FOnBindReplicationData OnBindReplicationData;
 
