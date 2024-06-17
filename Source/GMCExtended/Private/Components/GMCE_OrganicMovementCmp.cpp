@@ -535,7 +535,7 @@ void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 		{
 			FVector ControlDirection = GetControllerRotation_GMC().Vector();
 			const float ControlAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(ControlDirection, UpdatedComponent->GetForwardVector()));
-			if (ControlAngle > FacingAngleOffsetThreshold)
+			if (ControlAngle > TurnInPlaceAngleThreshold)
 			{
 				Velocity = FVector::ZeroVector;
 				HandleTurnInPlace(DeltaSeconds);
@@ -638,7 +638,7 @@ void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
 		return;
 	}
 
-	if (bOrientToControlRotationDirection && TurnInPlaceDelay > 0.f && Velocity.IsNearlyZero() && (!HasRootMotion() || RootMotionMetaData.bApplyRotationWithRootMotion))
+	if (ShouldTurnInPlace(RootMotionMetaData))
 	{
 		HandleTurnInPlace(DeltaSeconds);
 		return;
@@ -1288,33 +1288,52 @@ void UGMCE_OrganicMovementCmp::SetStrafingMovement(bool bStrafingEnabled)
 	bOrientToControlRotationDirection = bStrafingEnabled;
 }
 
+bool UGMCE_OrganicMovementCmp::ShouldTurnInPlace(const FGMC_RootMotionVelocitySettings& RootMotionMetaData)
+{
+	if(bOrientToControlRotationDirection && Velocity.IsNearlyZero() && (!HasRootMotion() || RootMotionMetaData.bApplyRotationWithRootMotion))
+	{
+		//auto turn in place when standing still
+		if(TurnInPlaceDelay > 0.f)
+			return true;
+		
+		//auto turn in place if going over the max angle
+		if(TurnInPlaceAngleThreshold > 0)
+			return true;
+	}
+	return false;
+}
+
+bool UGMCE_OrganicMovementCmp::ShouldContinueTurnInPlace(const float angle)
+{
+	return angle >= TurnInPlaceAngleThreshold || TurnInPlaceSecondsAccumulated > 0;
+}
+
 void UGMCE_OrganicMovementCmp::HandleTurnInPlace(float DeltaSeconds)
 {
-	const float ControllerAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(TurnInPlaceDelayedDirection, UpdatedComponent->GetForwardVector()));
-	if (ControllerAngle >= FacingAngleOffsetThreshold || !TurnInPlaceDelayedDirection.IsZero())
+	//while not turning we compare to the control direction
+	FVector controlDirection = GetControllerRotation_GMC().Vector();
+	float angle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(controlDirection, UpdatedComponent->GetForwardVector()));
+	if (ShouldContinueTurnInPlace(angle))
 	{
 		TurnInPlaceSecondsAccumulated += DeltaSeconds;
 			
 		if (TurnInPlaceSecondsAccumulated >= TurnInPlaceDelay || IsInputPresent())
 		{
-			if (TurnInPlaceDelayedDirection.IsZero() || IsInputPresent())
-			{
-				TurnInPlaceDelayedDirection = GetControllerRotation_GMC().Vector() * FVector(1.f, 1.f, 0.f);
-			}
+			FVector targetRotation = GetControllerRotation_GMC().Vector() * FVector(1.f, 1.f, 0.f);
+			targetRotation.Normalize();
 			
 			if (bUseSafeRotations)
 			{
-				RotateYawTowardsDirectionSafe(TurnInPlaceDelayedDirection, RotationRate, DeltaSeconds);				
+				RotateYawTowardsDirectionSafe(targetRotation, RotationRate, DeltaSeconds);				
 			}
 			else
 			{
-				RotateYawTowardsDirection(TurnInPlaceDelayedDirection, RotationRate, DeltaSeconds);
+				RotateYawTowardsDirection(targetRotation, RotationRate, DeltaSeconds);
 			}
 
-			if (ControllerAngle < 2.f)
+			if (angle < 2.f)
 			{
 				TurnInPlaceSecondsAccumulated = 0.f;
-				TurnInPlaceDelayedDirection = FVector::ZeroVector;
 			}
 		}
 	}
