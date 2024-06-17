@@ -8,7 +8,8 @@
 #include "Support/GMCEMovementSample.h"
 #include "GMCE_OrganicMovementCmp.generated.h"
 
-DECLARE_DELEGATE_RetVal_ThreeParams(FTransform, FOnProcessRootMotion, const FTransform&, UGMCE_OrganicMovementCmp*, float)
+//KFPS : renamed delegate to FOnProcessRootMotion+Ex due to conflict from CharacterMovementComponent
+DECLARE_DELEGATE_RetVal_ThreeParams(FTransform, FOnProcessRootMotionEx, const FTransform&, UGMCE_OrganicMovementCmp*, float)
 DECLARE_DELEGATE_TwoParams(FOnSyncDataApplied, const FGMC_PawnState&, EGMC_NetContext)
 DECLARE_DELEGATE(FOnBindReplicationData)
 
@@ -129,7 +130,7 @@ public:
 
 	float GetAimYawRemaining() const { return AimYawRemaining; }
 	
-	FOnProcessRootMotion ProcessRootMotionPreConvertToWorld;
+	FOnProcessRootMotionEx ProcessRootMotionPreConvertToWorld;
 	FOnSyncDataApplied OnSyncDataAppliedDelegate;
 	FOnBindReplicationData OnBindReplicationData;
 
