@@ -69,6 +69,12 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 		SkeletalMesh->AttachToComponent(GetPawnOwner()->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
 		SkeletalMesh->SetRelativeLocationAndRotation(PreviousRelativeMeshLocation, PreviousRelativeMeshRotation, false, nullptr, ETeleportType::ResetPhysics);
 		bResetMesh = false;
+
+		if (GetOwnerRole() == ROLE_SimulatedProxy)
+		{
+			// Re-enable smoothing on simulated proxies.
+			SetComponentToSmooth(GetSkeletalMeshReference());
+		}
 	}
 	else if (bFirstRagdollTick && GetMovementMode() == GetRagdollMode())
 	{
@@ -87,6 +93,12 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 		if (IsValid(CollisionComponent))
 		{
 			CollisionComponent->SetCollisionEnabled(ECollisionEnabled::Type::NoCollision);
+		}
+
+		if (GetOwnerRole() == ROLE_SimulatedProxy)
+		{
+			// Disable smoothing on simulated proxies, since it'll just make Unreal complain.
+			SetComponentToSmooth(nullptr);
 		}
 		
 		PreviousCollisionHalfHeight = GetRootCollisionHalfHeight(true);
