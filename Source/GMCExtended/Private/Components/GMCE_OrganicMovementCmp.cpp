@@ -338,7 +338,7 @@ bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_Flo
 	if (bWantsRagdoll || (GetMovementMode() == GetRagdollMode()))
 	{
 		// We may need to either enable or disable ragdoll mode.
-		if (bWantsRagdoll && GetMovementMode() == EGMC_MovementMode::Grounded)
+		if (bWantsRagdoll && (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne))
 		{
 			RagdollLinearVelocity = GetRagdollInitialVelocity();
 			HaltMovement();
@@ -439,7 +439,6 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 	{
 		const FVector BoneLocation = SkeletalMesh->GetBoneLocation(RagdollBoneName);
 		const FVector BoneVelocity = SkeletalMesh->GetBoneLinearVelocity(RagdollBoneName) * FVector(1.f, 1.f, 0.f);
-		
 		
 		if (GetOwnerRole() == ROLE_Authority)
 		{
