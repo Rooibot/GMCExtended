@@ -1,4 +1,5 @@
 ﻿#include "GMCExtendedAnimation.h"
+#include "GMCExtendedAnimationLog.h"
 
 #define LOCTEXT_NAMESPACE "FGMCExtendedMotionWarpingModule"
 

@@ -69,6 +69,12 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 		SkeletalMesh->AttachToComponent(GetPawnOwner()->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
 		SkeletalMesh->SetRelativeLocationAndRotation(PreviousRelativeMeshLocation, PreviousRelativeMeshRotation, false, nullptr, ETeleportType::ResetPhysics);
 		bResetMesh = false;
+
+		if (GetOwnerRole() == ROLE_SimulatedProxy)
+		{
+			// Re-enable smoothing on simulated proxies.
+			SetComponentToSmooth(GetSkeletalMeshReference());
+		}
 	}
 	else if (bFirstRagdollTick && GetMovementMode() == GetRagdollMode())
 	{
@@ -87,6 +93,12 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 		if (IsValid(CollisionComponent))
 		{
 			CollisionComponent->SetCollisionEnabled(ECollisionEnabled::Type::NoCollision);
+		}
+
+		if (GetOwnerRole() == ROLE_SimulatedProxy)
+		{
+			// Disable smoothing on simulated proxies, since it'll just make Unreal complain.
+			SetComponentToSmooth(nullptr);
 		}
 		
 		PreviousCollisionHalfHeight = GetRootCollisionHalfHeight(true);
@@ -338,7 +350,7 @@ bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_Flo
 	if (bWantsRagdoll || (GetMovementMode() == GetRagdollMode()))
 	{
 		// We may need to either enable or disable ragdoll mode.
-		if (bWantsRagdoll && GetMovementMode() == EGMC_MovementMode::Grounded)
+		if (bWantsRagdoll && (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne))
 		{
 			RagdollLinearVelocity = GetRagdollInitialVelocity();
 			HaltMovement();
@@ -439,7 +451,6 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 	{
 		const FVector BoneLocation = SkeletalMesh->GetBoneLocation(RagdollBoneName);
 		const FVector BoneVelocity = SkeletalMesh->GetBoneLinearVelocity(RagdollBoneName) * FVector(1.f, 1.f, 0.f);
-		
 		
 		if (GetOwnerRole() == ROLE_Authority)
 		{
