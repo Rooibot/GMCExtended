@@ -22,14 +22,22 @@ enum class ELocomotionQuadrant : uint8
 UENUM(BlueprintType)
 enum class ELocomotionCompass : uint8
 {
-	Forward UMETA(ToolTip="Character locomotion is close to 0"),
-	ForwardRight UMETA(ToolTip="Character locomotion is close to 45"),
-	Right UMETA(ToolTip="Character locomotion is close to 90"),
-	BackwardRight UMETA(ToolTip="Character locomotion is close to 135"),
-	Backward UMETA(ToolTip="Character locomotion is close to 180 (or -180)"),
-	BackwardLeft UMETA(ToolTip="Character locomotion is close to -135"),
-	Left UMETA(ToolTip="Character locomotion is close to -90"),
-	ForwardLeft UMETA(ToolTip="Character locomotion is close to -45")
+	Back_180	UMETA(DisplayName="Backward (180°)"),
+	Left_135    UMETA(DisplayName="Leftward (135°)"),
+	Left_90     UMETA(DisplayName="Leftward (90°)"),
+	Left_45	    UMETA(DisplayName="Leftward (45°)"),
+	Front_0     UMETA(DisplayName="Forward (0°)"),
+	Right_45    UMETA(DisplayName="Rightward (45°)"),
+	Right_90    UMETA(DisplayName="Rightward (90°)"),
+	Right_135   UMETA(DisplayName="Rightward (135°)")
+};
+
+UENUM(BlueprintType)
+enum class ELocomotionAnimationMode : uint8
+{ 
+	NonStrafing		UMETA(DisplayName="Non-Strafing", ToolTip="Not strafing at all; the character will always face the direction they're moving and only uses a forward animation.."),
+	Strafing4Way	UMETA(DisplayName="4-Way Strafing", ToolTip="Strafing using four directional animations"),
+	Strafing8Way	UMETA(DisplayName="8-Way Strafing", ToolTip="Strafing using eight directional animations")
 };
 
 /**
@@ -44,13 +52,32 @@ class GMCEXTENDEDANIMATION_API UGMCE_MovementAnimInstance : public UGMCE_BaseAni
 protected:
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Orientation")
+	ELocomotionAnimationMode LocomotionAnimationMode { ELocomotionAnimationMode::NonStrafing };
+	
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category="Orientation")
 	ELocomotionQuadrant LocomotionQuadrant { ELocomotionQuadrant::FrontRight };
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category="Orientation")
-	ELocomotionCompass LocomotionCompass { ELocomotionCompass::Forward };
+	ELocomotionCompass LocomotionCompass { ELocomotionCompass::Front_0 };
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category="Orientation")
-	ELocomotionCompass OrientationCompass { ELocomotionCompass::Forward };
+	ELocomotionCompass OrientationCompass { ELocomotionCompass::Front_0 };
+
+	virtual void UpdateLocomotionValues(bool bUseCurrentValues = true);
+
+	static ELocomotionQuadrant CalculateLocomotionQuadrant(const ELocomotionQuadrant& CurrentQuadrant, const float InputAngle);
+	ELocomotionCompass CalculateLocomotionCompass8Way(const ELocomotionCompass& CurrentCompass, float InputAngle,
+	                                              bool bUseCurrent, float SwitchBuffer,
+	                                              ELocomotionAnimationMode AnimationMode) const;
+	ELocomotionCompass CalculateLocomotionCompass4Way(const ELocomotionCompass& CurrentCompass, float InputAngle,
+												  bool bUseCurrent, float SwitchBuffer,
+												  ELocomotionAnimationMode AnimationMode) const;
+
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Movement|Orientation", meta=(BlueprintThreadSafe))
+	static float GetOrientationAngleForCompass(const float InputAngle, const ELocomotionCompass CurrentCompass);
+
+	static float GetAngleForCompass(const ELocomotionCompass& CurrentCompass);
 	
 };

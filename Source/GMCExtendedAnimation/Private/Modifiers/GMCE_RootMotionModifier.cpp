@@ -1,6 +1,5 @@
 #include "GMCE_RootMotionModifier.h"
-
-#include "GMCExtendedAnimation.h"
+#include "GMCExtendedAnimationLog.h"
 #include "GMCE_MotionWarpingComponent.h"
 
 UGMCE_RootMotionModifier::UGMCE_RootMotionModifier(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
