@@ -83,6 +83,11 @@ public:
 	/// If both bOrientToVelocityDirection and bOrientToInputDirection are true, the ground speed must be
 	/// greater than this amount to orient towards the velocity; any lower and it will orient towards input instead.
 	float MinimumVelocityForOrientation { 100.f };
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Operation")
+	/// If true, the angle at which the character is moving will be constrained by the rotation rate as well.
+	/// You do not -- ever -- want to set this true in a strafing scenario!
+	bool bLockVelocityToRotationRate { false };
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Operation")
 	/// If true, if the direction a character is trying to move differs from the current forward vector

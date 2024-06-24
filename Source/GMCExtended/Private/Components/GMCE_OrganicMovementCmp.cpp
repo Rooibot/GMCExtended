@@ -589,50 +589,79 @@ float UGMCE_OrganicMovementCmp::GetInputAccelerationCustom_Implementation() cons
 
 void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 {
-	// If we're using "Require Facing Before Move" and we're on the ground and we're not currently
-	// moving, we want to check the direction we're TRYING to face and see if we're offset at all.
-	if (bRequireFacingBeforeMove && IsMovingOnGround() && Velocity.IsNearlyZero())
+	if (IsMovingOnGround())
 	{
-		if (bOrientToControlRotationDirection)
+		// If we're using "Require Facing Before Move" and we're on the ground and we're not currently
+		// moving, we want to check the direction we're TRYING to face and see if we're offset at all.
+		if (bRequireFacingBeforeMove && Velocity.IsNearlyZero())
 		{
-			FVector ControlDirection = GetControllerRotation_GMC().Vector();
-			const float ControlAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(ControlDirection, UpdatedComponent->GetForwardVector()));
-			if (ControlAngle > FacingAngleOffsetThreshold)
+			if (bOrientToControlRotationDirection)
 			{
-				Velocity = FVector::ZeroVector;
-				HandleTurnInPlace(DeltaSeconds);
-				return;
+				FVector ControlDirection = GetControllerRotation_GMC().Vector();
+				const float ControlAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(ControlDirection, UpdatedComponent->GetForwardVector()));
+				if (ControlAngle > FacingAngleOffsetThreshold)
+				{
+					Velocity = FVector::ZeroVector;
+					HandleTurnInPlace(DeltaSeconds);
+					return;
+				}
+			}
+			else
+			{
+				FVector InputDirection = GetProcessedInputVector();
+				bool bFinishTurn = false;
+				if (InputDirection.IsNearlyZero())
+				{
+					InputDirection = TurnToDirection;
+					bFinishTurn = true;
+				}
+				const float VelocityAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(InputDirection, UpdatedComponent->GetForwardVector()));
+
+				// If our velocity is less than our threshold angle, we can move normally. Otherwise, we'll want to just
+				// turn-in-place instead.
+				if (VelocityAngle > FacingAngleOffsetThreshold || bFinishTurn)
+				{
+					// We're not calling our parent implementation, and we're not moving until we're within our angle threshold.
+					Velocity = FVector::ZeroVector;
+					TurnToDirection = (VelocityAngle < FacingAngleOffsetThreshold) ? FVector::ZeroVector : InputDirection;
+		
+					if (bUseSafeRotations)
+					{
+						RotateYawTowardsDirectionSafe(InputDirection, RotationRate, DeltaSeconds);
+					}
+					else
+					{
+						RotateYawTowardsDirection(InputDirection, RotationRate, DeltaSeconds);
+					}
+					return;
+				}
 			}
 		}
-		else
+		else if (bLockVelocityToRotationRate && !Velocity.IsNearlyZero())
 		{
-			FVector InputDirection = GetProcessedInputVector();
-			bool bFinishTurn = false;
-			if (InputDirection.IsNearlyZero())
-			{
-				InputDirection = TurnToDirection;
-				bFinishTurn = true;
-			}
-			const float VelocityAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(InputDirection, UpdatedComponent->GetForwardVector()));
+			// If we are locking velocity to rotation rate, we want to constrain how quickly our velocity will change.
+			const FRotator CurrentRotation = RoundRotator(UpdatedComponent->GetComponentRotation(), EGMC_FloatPrecisionBlueprint::TwoDecimals);
+			const FRotator TargetRotation = RoundRotator(UKismetMathLibrary::Conv_VectorToRotator(Velocity), EGMC_FloatPrecisionBlueprint::TwoDecimals);
+			const float CurrentYaw = FRotator::NormalizeAxis(CurrentRotation.Yaw);
+			const float TargetYaw = FRotator::NormalizeAxis(TargetRotation.Yaw);
 
-			// If our velocity is less than our threshold angle, we can move normally. Otherwise, we'll want to just
-			// turn-in-place instead.
-			if (VelocityAngle > FacingAngleOffsetThreshold || bFinishTurn)
+			if (!FMath::IsNearlyEqual(CurrentYaw, TargetYaw, 0.01))
 			{
-				// We're not calling our parent implementation, and we're not moving until we're within our angle threshold.
-				Velocity = FVector::ZeroVector;
-				TurnToDirection = (VelocityAngle < FacingAngleOffsetThreshold) ? FVector::ZeroVector : InputDirection;
-		
-				if (bUseSafeRotations)
+				// Our yaw differs enough that we should check it.
+				const float MaxDeltaYaw = FRotator::NormalizeAxis(RotationRate * DeltaSeconds);
+				if (MaxDeltaYaw < FMath::Abs(TargetYaw - CurrentYaw))
 				{
-					RotateYawTowardsDirectionSafe(InputDirection, RotationRate, DeltaSeconds);
+					// Our yaw differs enough that we're exceeding our rotation rate.
+					const float NewRotationYaw = FMath::FixedTurn(CurrentYaw, TargetYaw, MaxDeltaYaw);
+					const FRotator NewRotation = FRotator(0.f, NewRotationYaw, 0.f);
+
+					// Generate new input and velocity, constrained by our rotation rate.
+					const FVector NewDirection = UKismetMathLibrary::Conv_RotatorToVector(NewRotation).GetSafeNormal2D();
+					Velocity = Velocity.Size2D() * NewDirection;
+					ProcessedInputVector = ProcessedInputVector.Size2D() * NewDirection;
 				}
-				else
-				{
-					RotateYawTowardsDirection(InputDirection, RotationRate, DeltaSeconds);
-				}
-				return;
 			}
+			
 		}
 	}
 
