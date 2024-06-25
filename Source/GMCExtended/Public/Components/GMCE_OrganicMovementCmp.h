@@ -164,6 +164,7 @@ public:
 	FVector GetCurrentAnimationAcceleration() const { return CurrentAnimationAcceleration; }
 
 	float GetAimYawRemaining() const { return AimYawRemaining; }
+	float GetComponentYawRemaining() const { return ComponentYawRemaining; }
 	
 	FOnProcessRootMotionGMC ProcessRootMotionPreConvertToWorld;
 	FOnSyncDataApplied OnSyncDataAppliedDelegate;
@@ -189,7 +190,13 @@ protected:
 	FRotator LastComponentRotation { FRotator::ZeroRotator };
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	FRotator TargetComponentRotation { FRotator::ZeroRotator };
+	
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	float CurrentComponentYawRate { 0.f };
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	float ComponentYawRemaining { 0.f };
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	FVector CurrentAnimationAcceleration { 0.f };

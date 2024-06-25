@@ -64,6 +64,12 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category="Orientation")
 	ELocomotionCompass OrientationCompass { ELocomotionCompass::Front_0 };
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Locomotion")
+	FName AnimationSpeedCurve { FName(TEXT("Speed")) };
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category="Locomotion")
+	float StrideWarpRatio { 1.f };
+	
 	virtual void UpdateLocomotionValues(bool bUseCurrentValues = true);
 
 	static ELocomotionQuadrant CalculateLocomotionQuadrant(const ELocomotionQuadrant& CurrentQuadrant, const float InputAngle);

@@ -1413,6 +1413,7 @@ void UGMCE_OrganicMovementCmp::HandleTurnInPlace(float DeltaSeconds)
 			{
 				TurnInPlaceDelayedDirection = GetControllerRotation_GMC().Vector() * FVector(1.f, 1.f, 0.f);
 			}
+			ComponentYawRemaining = UGMCE_UtilityLibrary::GetAngleDifferenceXY(TurnInPlaceDelayedDirection, UpdatedComponent->GetForwardVector());
 			
 			if (bUseSafeRotations)
 			{

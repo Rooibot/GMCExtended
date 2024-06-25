@@ -85,6 +85,10 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category="Turn-in-Place")
 	float ComponentYawDeltaRate { 0.f };
 
+	/// The degrees of yaw remaining between the target turn-in-place rotation and the character's current rotation.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category="Turn-in-Place")
+	float ComponentYawRemaining { 0.f };
+
 	/// The character's current velocity in world space.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category="Movement|Velocity")
 	FVector WorldVelocity { 0.f };

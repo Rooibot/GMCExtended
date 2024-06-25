@@ -42,6 +42,15 @@ void UGMCE_MovementAnimInstance::UpdateLocomotionValues(bool bUseCurrentValues)
 		}
 		OrientationAngle = GetOrientationAngleForCompass(LocomotionAngle, LocomotionCompass);
 	}
+
+	StrideWarpRatio = 1.f;
+	if (AnimationSpeedCurve != NAME_None)
+	{
+		if (const float SpeedValue = GetCurveValue(AnimationSpeedCurve); SpeedValue > UE_KINDA_SMALL_NUMBER)
+		{
+			StrideWarpRatio = GroundSpeed / SpeedValue;
+		}
+	}
 }
 
 ELocomotionQuadrant UGMCE_MovementAnimInstance::CalculateLocomotionQuadrant(const ELocomotionQuadrant& CurrentQuadrant,
@@ -165,7 +174,10 @@ const
 	/** Ensure the buffer acts only as a positive value. */
 	const float Buffer = FMath::Abs(SwitchBuffer);
 
-	/** Define the animation ranges. */
+	/** Define the animation ranges. We double them up so that we only match
+	 *  values for indexes 0, 2, 4, and 6 -- the enumeration values which correspond
+	 *  to the four cardinal compass points.
+	 */
 	constexpr float AngleRanges[] = {
 		125.f, -125.f, // Backward
 		125.f, -125.f, // --
