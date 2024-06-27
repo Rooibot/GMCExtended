@@ -1305,7 +1305,9 @@ bool UGMCE_OrganicMovementCmp::ShouldTurnInPlace(const FGMC_RootMotionVelocitySe
 
 bool UGMCE_OrganicMovementCmp::ShouldContinueTurnInPlace(const float angle)
 {
-	return angle >= TurnInPlaceAngleThreshold || TurnInPlaceSecondsAccumulated > 0;
+	return TurnInPlaceSecondsAccumulated > 0
+		|| TurnInPlaceDelay > 0
+		|| (TurnInPlaceAngleThreshold > 0 && angle >= TurnInPlaceAngleThreshold);
 }
 
 void UGMCE_OrganicMovementCmp::HandleTurnInPlace(float DeltaSeconds)
