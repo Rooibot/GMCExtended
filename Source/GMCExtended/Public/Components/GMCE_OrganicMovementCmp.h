@@ -8,7 +8,7 @@
 #include "Support/GMCEMovementSample.h"
 #include "GMCE_OrganicMovementCmp.generated.h"
 
-DECLARE_DELEGATE_RetVal_ThreeParams(FTransform, FOnProcessRootMotion, const FTransform&, UGMCE_OrganicMovementCmp*, float)
+DECLARE_DELEGATE_RetVal_ThreeParams(FTransform, FOnProcessRootMotionEx, const FTransform&, UGMCE_OrganicMovementCmp*, float)
 DECLARE_DELEGATE_TwoParams(FOnSyncDataApplied, const FGMC_PawnState&, EGMC_NetContext)
 DECLARE_DELEGATE(FOnBindReplicationData)
 
@@ -87,6 +87,11 @@ public:
 	/// this many seconds before we turn-in-place when velocity is zero.
 	float TurnInPlaceDelay { 0.f };
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Operation")
+	/// If this is a non-zero positive number and bOrientToControlRotationDirection is true, we will wait
+	/// until this angle is reached from the pawn's rotation before turning towards the control rotation
+	float TurnInPlaceAngleThreshold { 80.f };
+
 	float TurnInPlaceSecondsAccumulated { 0.f };
 	FVector TurnInPlaceDelayedDirection { 0.f };
 	
@@ -95,6 +100,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Movement")
 	void SetStrafingMovement(bool bStrafingEnabled = false);
 
+	bool ShouldTurnInPlace(const FGMC_RootMotionVelocitySettings& RootMotionMetaData);
+	bool ShouldContinueTurnInPlace(const float angle);
 	void HandleTurnInPlace(float DeltaSeconds);
 	
 	// Utilities
@@ -129,7 +136,7 @@ public:
 
 	float GetAimYawRemaining() const { return AimYawRemaining; }
 	
-	FOnProcessRootMotion ProcessRootMotionPreConvertToWorld;
+	FOnProcessRootMotionEx ProcessRootMotionPreConvertToWorld;
 	FOnSyncDataApplied OnSyncDataAppliedDelegate;
 	FOnBindReplicationData OnBindReplicationData;
 
