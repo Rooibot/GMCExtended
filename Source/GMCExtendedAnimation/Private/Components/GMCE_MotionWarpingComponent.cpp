@@ -1,6 +1,7 @@
 #include "Components/GMCE_MotionWarpingComponent.h"
 #include "Animation/AnimNotifyState_GMCExMotionWarp.h"
 #include "GMCExtendedAnimation.h"
+#include "GMCExtendedAnimationLog.h"
 #include "GMCE_MotionWarpTarget.h"
 #include "GMCE_RootMotionModifier_SkewWarp.h"
 #include "GMCE_RootMotionModifier_Warp.h"

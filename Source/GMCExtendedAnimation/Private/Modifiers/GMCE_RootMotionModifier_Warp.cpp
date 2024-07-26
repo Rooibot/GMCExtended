@@ -4,6 +4,7 @@
 #include "GMCE_RootMotionModifier_Warp.h"
 
 #include "GMCExtendedAnimation.h"
+#include "GMCExtendedAnimationLog.h"
 #include "GMCE_MotionWarpingComponent.h"
 #include "GMCE_MotionWarpingUtilities.h"
 

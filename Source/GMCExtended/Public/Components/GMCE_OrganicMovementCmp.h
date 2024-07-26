@@ -8,11 +8,41 @@
 #include "Support/GMCEMovementSample.h"
 #include "GMCE_OrganicMovementCmp.generated.h"
 
-DECLARE_DELEGATE_RetVal_ThreeParams(FTransform, FOnProcessRootMotion, const FTransform&, UGMCE_OrganicMovementCmp*, float)
+// We append GMC to the delegate name because Epic decided to add an FOnProcessRootMotion to the CMC in 5.4.
+DECLARE_DELEGATE_RetVal_ThreeParams(FTransform, FOnProcessRootMotionGMC, const FTransform&, UGMCE_OrganicMovementCmp*, float)
 DECLARE_DELEGATE_TwoParams(FOnSyncDataApplied, const FGMC_PawnState&, EGMC_NetContext)
 DECLARE_DELEGATE(FOnBindReplicationData)
 
 class UGMCE_BaseSolver;
+
+USTRUCT(BlueprintType)
+struct GMCEXTENDED_API FGMCE_SpeedMark
+{
+	GENERATED_BODY()
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", ClampMax="180", UIMin="0", UIMax="180"))
+	float AngleOffset { 0.f };
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0.1", ClampMax="1.0", UIMin="0.1", UIMax="1.0"))
+	float SpeedFactor { 0.f };
+};
+
+UENUM(BlueprintType)
+enum class EGMCE_TurnInPlaceType : uint8
+{
+	None,
+	MovementComponent,
+	TrackedCurveValue
+};
+
+UENUM(BlueprintType)
+enum class EGMCE_TurnInPlaceState : uint8
+{
+	Ready,
+	Starting,
+	Running,
+	Done
+};
 
 UCLASS(ClassGroup=(GMCExtended), meta=(BlueprintSpawnableComponent, DisplayName="GMCExtended Organic Movement Component"))
 class GMCEXTENDED_API UGMCE_OrganicMovementCmp : public UGMCE_CoreComponent
@@ -36,13 +66,20 @@ public:
 	virtual void BindReplicationData_Implementation() override;
 	virtual FVector PreProcessInputVector_Implementation(FVector InRawInputVector) override;
 	virtual void PreMovementUpdate_Implementation(float DeltaSeconds) override;
+	virtual void PreSimulatedMoveExecution_Implementation(const FGMC_PawnState& InputState, bool bCumulativeUpdate, float DeltaTime, double Timestamp) override;
 	virtual void MovementUpdate_Implementation(float DeltaSeconds) override;
+	virtual void MovementUpdateSimulated_Implementation(float DeltaSeconds) override;
 	virtual void GenSimulationTick_Implementation(float DeltaTime) override;
+	virtual void GenPredictionTick_Implementation(float DeltaTime) override;
 	virtual void GenAncillaryTick_Implementation(float DeltaTime, bool bLocalMove, bool bCombinedClientMove) override;
 	virtual bool UpdateMovementModeDynamic_Implementation(FGMC_FloorParams& Floor, float DeltaSeconds) override;
 	virtual void OnMovementModeChanged_Implementation(EGMC_MovementMode PreviousMovementMode) override;
 	virtual void OnMovementModeChangedSimulated_Implementation(EGMC_MovementMode PreviousMovementMode) override;
+	virtual void PostMovementUpdate_Implementation(float DeltaSeconds) override;
+	virtual void PostSimulatedMoveExecution_Implementation(const FGMC_PawnState& OutputState, bool bCumulativeUpdate, float DeltaTime, double Timestamp) override;
 
+	virtual float GetMaxSpeed() const override;
+	
 	virtual void PhysicsCustom_Implementation(float DeltaSeconds) override;
 	virtual float GetInputAccelerationCustom_Implementation() const override;
 	virtual void CalculateVelocity(float DeltaSeconds) override;
@@ -68,37 +105,94 @@ public:
 	/// If both bOrientToVelocityDirection and bOrientToInputDirection are true, the ground speed must be
 	/// greater than this amount to orient towards the velocity; any lower and it will orient towards input instead.
 	float MinimumVelocityForOrientation { 100.f };
-	
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Operation")
+	/// If true, the angle at which the character is moving will be constrained by the rotation rate as well.
+	/// You do not -- ever -- want to set this true in a strafing scenario!
+	bool bLockVelocityToRotationRate { false };
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Turn-in-Place")
 	/// If true, if the direction a character is trying to move differs from the current forward vector
 	/// by more than a certain amount, the character will only rotate rather than actually moving. This should
 	/// only be used with non-strafing movement, and generally in conjunction with either bOrientToInputDirection
 	/// or the combined bOrientToInputDirection / bOrientToVelocityDirection mode.
 	bool bRequireFacingBeforeMove{false};
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Operation")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Turn-in-Place")
 	/// When bRequireFacingBeforeMove is true, if the character attempts to move in a direction more than
 	/// this many degrees off from the current 'forward' direction, they will rotate until they are within
 	/// this threshold of their movement direction before they begin moving forward.
 	float FacingAngleOffsetThreshold { 25.f };
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Operation")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Turn-in-Place")
+	/// If turn in place is enabled, this determines how the turn-in-place is handled. 
+	EGMCE_TurnInPlaceType TurnInPlaceType { EGMCE_TurnInPlaceType::MovementComponent };
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Turn-in-Place")
 	/// If this is a non-zero positive number and bOrientToControlRotationDirection is true, we will wait
 	/// this many seconds before we turn-in-place when velocity is zero.
 	float TurnInPlaceDelay { 0.f };
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Turn-in-Place")
+	/// The rotation rate at which we should turn-in-place. This is separate from normal component
+	/// rotation rate because you may want turn-in-place to be a little less zippy.
+	float TurnInPlaceRotationRate { 125.f };
+	
 	float TurnInPlaceSecondsAccumulated { 0.f };
 	FVector TurnInPlaceDelayedDirection { 0.f };
+	FVector TurnInPlaceStartDirection{ 0.f };
+	
+	int BI_TurnInPlaceDelayedDirection { -1 };
+	int BI_TurnInPlaceStartDirection { -1 };
 	
 	FVector TurnToDirection { 0.f };
+	
+	float TurnInPlaceTotalYaw { 0.f };
+	float TurnInPlaceLastYaw { 0.f };
+
+	int BI_TurnToDirection{ -1 };
+
+	bool bWantsTurnInPlace { false };
+	int BI_WantsTurnInPlace { -1 };
+	EGMCE_TurnInPlaceState TurnInPlaceState { EGMCE_TurnInPlaceState::Ready };
+
+	float RootYawOffset { 0.f };
+	float RootYawBlendTime { 0.f };
+
+	void UpdateTurnInPlaceState(bool bSimulated = false);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Movement")
+	bool IsTurningInPlace() const { return TurnInPlaceState == EGMCE_TurnInPlaceState::Running; }
 
 	UFUNCTION(BlueprintCallable, Category="Movement")
 	void SetStrafingMovement(bool bStrafingEnabled = false);
 
-	void HandleTurnInPlace(float DeltaSeconds);
+	bool ShouldTurnInPlace() const;
+	void CalculateTurnInPlace(float DeltaSeconds);
+	void ApplyTurnInPlace(float DeltaSeconds, bool bSimulated);
+	void EndTurnInPlace(bool bSimulated = false);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Movement")
+	float GetTurnInPlaceDuration() const;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Tempo")
+	/// If this is true, then if the movement direction differs from the character's forward vector
+	/// by more than a certain amount, the maximum speed will be reduced.
+	bool bLimitStrafeSpeed { false };
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Tempo", meta=(EditCondition="bLimitStrafeSpeed", EditConditionHides))
+	TArray<FGMCE_SpeedMark> StrafeSpeedPoints { { 45.f, 1.f }, { 120.f, 0.5f } };
 	
 	// Utilities
 
+	static float CalculateDirection(const FVector& Direction, const FRotator& Rotation);
+	
+	UFUNCTION(BlueprintCallable, Category="Movement")
+	float GetLocomotionAngle() const;
+
+	UFUNCTION(BlueprintCallable, Category="Movement")
+	float GetOrientationAngle() const;
+	
 	// Debug
 	
 	/// If called in a context where the DrawDebug calls are disabled, this function will do nothing.
@@ -110,7 +204,7 @@ public:
 
 #pragma region Animation Support
 protected:
-	virtual void MontageUpdate(float DeltaSeconds) override;
+	virtual void PreProcessRootMotion(const FGMC_AnimMontageInstance& MontageInstance, FRootMotionMovementParams& InOutRootMotionParams, float DeltaSeconds) override;
 	virtual void OnSyncDataApplied_Implementation(const FGMC_PawnState& State, EGMC_NetContext Context) override;
 
 	void UpdateAnimationHelperValues(float DeltaSeconds);
@@ -128,8 +222,9 @@ public:
 	FVector GetCurrentAnimationAcceleration() const { return CurrentAnimationAcceleration; }
 
 	float GetAimYawRemaining() const { return AimYawRemaining; }
+	float GetComponentYawRemaining() const { return ComponentYawRemaining; }
 	
-	FOnProcessRootMotion ProcessRootMotionPreConvertToWorld;
+	FOnProcessRootMotionGMC ProcessRootMotionPreConvertToWorld;
 	FOnSyncDataApplied OnSyncDataAppliedDelegate;
 	FOnBindReplicationData OnBindReplicationData;
 
@@ -153,7 +248,13 @@ protected:
 	FRotator LastComponentRotation { FRotator::ZeroRotator };
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	FRotator TargetComponentRotation { FRotator::ZeroRotator };
+	
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	float CurrentComponentYawRate { 0.f };
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	float ComponentYawRemaining { 0.f };
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	FVector CurrentAnimationAcceleration { 0.f };
@@ -308,6 +409,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory|Precalculations")
 	bool bPrecalculateFutureTrajectory { true };
 
+	/// If true, trajectory will be calculated based on the character's skeletal mesh (if possible) rather than the
+	/// root component.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory")
+    bool bTrajectoryUsesMesh { true };
+
+	/// If true, trajectory will be calculated based on the controller rotation rather than the character rotation.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory")
+	bool bTrajectoryUsesControllerRotation { false };
+	
 	/// The maximum size of the trajectory sample history.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Movement Trajectory")
 	int32 MaxTrajectorySamples = { 200 };
