@@ -20,10 +20,10 @@ struct GMCEXTENDED_API FGMCE_SpeedMark
 {
 	GENERATED_BODY()
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", ClampMax="180", UIMin="0", UIMax="180"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0", ClampMax="180", UIMin="0", UIMax="180"), Category="Locomotion Limits")
 	float AngleOffset { 0.f };
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0.1", ClampMax="1.0", UIMin="0.1", UIMax="1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(ClampMin="0.1", ClampMax="1.0", UIMin="0.1", UIMax="1.0"), Category="Locomotion Limits")
 	float SpeedFactor { 0.f };
 };
 
