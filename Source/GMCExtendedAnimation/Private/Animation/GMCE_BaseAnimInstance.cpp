@@ -68,6 +68,7 @@ void UGMCE_BaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	FVector WorldDirection = UKismetMathLibrary::Conv_RotatorToVector(WorldRotation).GetSafeNormal2D();
 
 	AimYawRemaining = MovementComponent->GetAimYawRemaining();
+	ComponentYawRemaining = MovementComponent->GetComponentYawRemaining();
 	
 	const FVector InputVector = MovementComponent->GetRawInputVector();
 	InputDirection = InputVector.GetSafeNormal();
@@ -75,12 +76,12 @@ void UGMCE_BaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 	AimOffset = UKismetMathLibrary::NormalizedDeltaRotator(AimRotation, WorldRotation);
 
-	bTurnInPlace = (AimYawRemaining != 0.f) && WorldVelocity.IsNearlyZero() && (ComponentYawDeltaRate != 0.f);
-
 	WorldGroundVelocity = WorldVelocity * FVector(1.f, 1.f, 0.f);
 
 	LocomotionAngle = MovementComponent->GetLocomotionAngle();
 	OrientationAngle = MovementComponent->GetOrientationAngle();
+
+	bTurnInPlace = MovementComponent->IsTurningInPlace();
 	
 	if (GetWorld()->IsGameWorld())
 	{

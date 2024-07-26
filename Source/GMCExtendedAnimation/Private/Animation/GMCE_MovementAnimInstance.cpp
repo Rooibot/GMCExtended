@@ -4,6 +4,7 @@
 #include "GMCE_MovementAnimInstance.h"
 
 #include "GMCExtendedAnimationLog.h"
+#include "Animation/AnimCurveCompressionCodec_UniformIndexable.h"
 #include "Kismet/KismetMathLibrary.h"
 
 void UGMCE_MovementAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
@@ -11,22 +12,48 @@ void UGMCE_MovementAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	Super::NativeUpdateAnimation(DeltaSeconds);
 
 	UpdateLocomotionValues(true);
+
+	if (bTurnInPlace) 
+	{
+		const float YawAbsolute = FMath::Abs(ComponentYawRemaining);
+		ComponentYawTimeRemaining = MovementComponent->GetTurnInPlaceDuration();
+		if (!bWasLastTurnInPlace || ComponentYawScale == 0.f)
+		{
+			ComponentTargetYaw = ComponentYawRemaining;
+			if (YawAbsolute <= 90.f)
+			{
+				ComponentYawScale = YawAbsolute / 90.f;
+			}
+			else
+			{
+				ComponentYawScale = YawAbsolute / 180.f;
+			}
+			UE_LOG(LogGMCExAnimation, Log, TEXT("[%s] yaw scale: %f (from %f)"), *GetNetRoleAsString(GetOwningActor()->GetLocalRole()), ComponentYawScale, YawAbsolute)
+		}
+	}
+	else
+	{
+		ComponentYawTimeRemaining = 0.f;
+		ComponentYawScale = 1.f;
+		ComponentTargetYaw = 0.f;
+	}
+	bWasLastTurnInPlace = bTurnInPlace;
 }
 
 void UGMCE_MovementAnimInstance::UpdateLocomotionValues(bool bUseCurrentValues)
 {
 	LocomotionQuadrant = CalculateLocomotionQuadrant(LocomotionQuadrant, LocomotionAngle);
 
-	if (LocomotionAnimationMode == ELocomotionAnimationMode::NonStrafing || !bIsMoving)
+	if (LocomotionAnimationMode == EGMCE_LocomotionAnimationMode::NonStrafing || !bIsMoving)
 	{
 		// No strafing (or standing idle), no orientation!
-		LocomotionCompass = ELocomotionCompass::Front_0;
-		OrientationCompass = ELocomotionCompass::Front_0;
+		LocomotionCompass = EGMCE_LocomotionCompass::Front_0;
+		OrientationCompass = EGMCE_LocomotionCompass::Front_0;
 		OrientationAngle = 0.f;
 	}
 	else
 	{
-		if (LocomotionAnimationMode == ELocomotionAnimationMode::Strafing4Way)
+		if (LocomotionAnimationMode == EGMCE_LocomotionAnimationMode::Strafing4Way)
 		{
 			LocomotionCompass = CalculateLocomotionCompass4Way(LocomotionCompass, LocomotionAngle, bUseCurrentValues, 5.f,
 														   LocomotionAnimationMode);
@@ -53,7 +80,7 @@ void UGMCE_MovementAnimInstance::UpdateLocomotionValues(bool bUseCurrentValues)
 	}
 }
 
-ELocomotionQuadrant UGMCE_MovementAnimInstance::CalculateLocomotionQuadrant(const ELocomotionQuadrant& CurrentQuadrant,
+EGMCE_LocomotionQuadrant UGMCE_MovementAnimInstance::CalculateLocomotionQuadrant(const EGMCE_LocomotionQuadrant& CurrentQuadrant,
                                                                             const float InputAngle)
 {
 	float Angle = InputAngle;
@@ -62,20 +89,20 @@ ELocomotionQuadrant UGMCE_MovementAnimInstance::CalculateLocomotionQuadrant(cons
 		Angle = UKismetMathLibrary::NormalizeAxis(Angle);
 	}
 
-	if (Angle >= 0.f && Angle <= 90.f) { return ELocomotionQuadrant::FrontRight; }
-	if (Angle >= 90.f && Angle <= 180.f) { return ELocomotionQuadrant::BackRight; }
-	if (Angle <= 0.f && Angle >= -90.f) { return ELocomotionQuadrant::FrontLeft; }
-	if (Angle <= -90.f && Angle >= -180.f) { return ELocomotionQuadrant::BackLeft; }
+	if (Angle >= 0.f && Angle <= 90.f) { return EGMCE_LocomotionQuadrant::FrontRight; }
+	if (Angle >= 90.f && Angle <= 180.f) { return EGMCE_LocomotionQuadrant::BackRight; }
+	if (Angle <= 0.f && Angle >= -90.f) { return EGMCE_LocomotionQuadrant::FrontLeft; }
+	if (Angle <= -90.f && Angle >= -180.f) { return EGMCE_LocomotionQuadrant::BackLeft; }
 
 	// We should never get here, but let's just have a sanity check anyway.
-	return ELocomotionQuadrant::FrontLeft;
+	return EGMCE_LocomotionQuadrant::FrontLeft;
 }
 
-ELocomotionCompass UGMCE_MovementAnimInstance::CalculateLocomotionCompass8Way(const ELocomotionCompass& CurrentCompass,
+EGMCE_LocomotionCompass UGMCE_MovementAnimInstance::CalculateLocomotionCompass8Way(const EGMCE_LocomotionCompass& CurrentCompass,
                                                                           const float InputAngle,
                                                                           const bool bUseCurrent,
                                                                           const float SwitchBuffer,
-                                                                          const ELocomotionAnimationMode AnimationMode)
+                                                                          const EGMCE_LocomotionAnimationMode AnimationMode)
 const
 {
 	/** Normalize the angle to be within [-180, 180] */
@@ -103,7 +130,7 @@ const
 		// Special case, since we know if we're bigger than our lowest positive backwards value, we're moving backwards.
 		if (FMath::Abs(Angle) >= AngleRanges[0])
 		{
-			return ELocomotionCompass::Back_180;
+			return EGMCE_LocomotionCompass::Back_180;
 		}
 		
 		const uint8 CompassIndex = static_cast<uint8>(CurrentCompass);
@@ -123,7 +150,7 @@ const
 	// Special case, since we know if we're bigger than our lowest positive backwards value, we're moving backwards.
 	if (FMath::Abs(Angle) >= AngleRanges[0] + Buffer)
 	{
-		return ELocomotionCompass::Back_180;
+		return EGMCE_LocomotionCompass::Back_180;
 	}
 
 	/** Perform a binary search. */
@@ -141,7 +168,7 @@ const
 		{
 			if (Angle >= MidMin && Angle < MidMax)
 			{
-				return static_cast<ELocomotionCompass>(Mid);
+				return static_cast<EGMCE_LocomotionCompass>(Mid);
 			}
 		}
 
@@ -156,14 +183,14 @@ const
 	}
 
 	// Fall through to a default.
-	return ELocomotionCompass::Front_0;
+	return EGMCE_LocomotionCompass::Front_0;
 }
 
-ELocomotionCompass UGMCE_MovementAnimInstance::CalculateLocomotionCompass4Way(const ELocomotionCompass& CurrentCompass,
+EGMCE_LocomotionCompass UGMCE_MovementAnimInstance::CalculateLocomotionCompass4Way(const EGMCE_LocomotionCompass& CurrentCompass,
                                                                           const float InputAngle,
                                                                           const bool bUseCurrent,
                                                                           const float SwitchBuffer,
-                                                                          const ELocomotionAnimationMode AnimationMode)
+                                                                          const EGMCE_LocomotionAnimationMode AnimationMode)
 const
 {
 	/** Normalize the angle to be within [-180, 180] */
@@ -194,7 +221,7 @@ const
 		// Special case, since we know if we're bigger than our lowest positive backwards value, we're moving backwards.
 		if (FMath::Abs(Angle) >= AngleRanges[0])
 		{
-			return ELocomotionCompass::Back_180;
+			return EGMCE_LocomotionCompass::Back_180;
 		}
 		
 		const uint8 CompassIndex = static_cast<uint8>(CurrentCompass);
@@ -214,7 +241,7 @@ const
 	// Special case, since we know if we're bigger than our lowest positive backwards value, we're moving backwards.
 	if (FMath::Abs(Angle) >= AngleRanges[0] + Buffer)
 	{
-		return ELocomotionCompass::Back_180;
+		return EGMCE_LocomotionCompass::Back_180;
 	}
 
 	/** Perform a binary search. */
@@ -232,7 +259,7 @@ const
 		{
 			if (Angle >= MidMin && Angle < MidMax)
 			{
-				return static_cast<ELocomotionCompass>(Mid);
+				return static_cast<EGMCE_LocomotionCompass>(Mid);
 			}
 		}
 
@@ -247,11 +274,11 @@ const
 	}
 
 	// Fall through to a default.
-	return ELocomotionCompass::Front_0;
+	return EGMCE_LocomotionCompass::Front_0;
 }
 
 float UGMCE_MovementAnimInstance::GetOrientationAngleForCompass(const float InputAngle,
-                                                                const ELocomotionCompass CurrentCompass
+                                                                const EGMCE_LocomotionCompass CurrentCompass
                                                                 )
 {
 	float Angle = InputAngle;
@@ -278,32 +305,174 @@ float UGMCE_MovementAnimInstance::GetOrientationAngleForCompass(const float Inpu
 		}
 	}
 	
-	UE_LOG(LogGMCExAnimation, Warning, TEXT("%f from %f -> %f"), InputAngle, AnimationAngle, Result);
-	
 	return Result;
 }
 
-float UGMCE_MovementAnimInstance::GetAngleForCompass(const ELocomotionCompass& CurrentCompass)
+float UGMCE_MovementAnimInstance::GetAngleForCompass(const EGMCE_LocomotionCompass& CurrentCompass)
 {
 	switch (CurrentCompass)
 	{
-	case ELocomotionCompass::Back_180:
+	case EGMCE_LocomotionCompass::Back_180:
 		return 180.f;
-	case ELocomotionCompass::Left_135:
+	case EGMCE_LocomotionCompass::Left_135:
 		return -135.f;
-	case ELocomotionCompass::Left_90:
+	case EGMCE_LocomotionCompass::Left_90:
 		return -90.f;
-	case ELocomotionCompass::Left_45:
+	case EGMCE_LocomotionCompass::Left_45:
 		return -45.f;
-	case ELocomotionCompass::Front_0:
+	case EGMCE_LocomotionCompass::Front_0:
 		return 0.f;
-	case ELocomotionCompass::Right_45:
+	case EGMCE_LocomotionCompass::Right_45:
 		return 45.f;
-	case ELocomotionCompass::Right_90:
+	case EGMCE_LocomotionCompass::Right_90:
 		return 90.f;
-	case ELocomotionCompass::Right_135:
+	case EGMCE_LocomotionCompass::Right_135:
 		return 135.f;
 	}
 
 	return 0.f;
+}
+
+float UGMCE_MovementAnimInstance::InitializeCurveTracker(FGMCE_AnimationCurveTracker& Tracker, UAnimSequence* Sequence,
+	FName CurveName, float StartTime, float PlayRate, float Scale)
+{
+	Tracker.CurveName = CurveName;
+	Tracker.SourceSequence = Sequence;
+	Tracker.AccumulatedTime = StartTime;
+	Tracker.PlayRate = PlayRate;
+	Tracker.Scale = Scale;
+
+	return GetCurveTrackerValue(Tracker);
+}
+
+float UGMCE_MovementAnimInstance::UpdateCurveTracker(FGMCE_AnimationCurveTracker& Tracker, float DeltaTime)
+{
+	Tracker.AccumulatedTime = FMath::Clamp(Tracker.AccumulatedTime + DeltaTime, 0.f, Tracker.SourceSequence->GetPlayLength() / Tracker.PlayRate);
+	return GetCurveTrackerValue(Tracker);
+}
+
+float UGMCE_MovementAnimInstance::GetCurveTrackerValue(FGMCE_AnimationCurveTracker& Tracker)
+{
+	// Exit early if we have no curve data.
+	if (!IsValid(Tracker.SourceSequence)) return 0.f;
+	if (!Tracker.SourceSequence->HasCurveData(Tracker.CurveName, false)) return 0.f;
+
+	const FAnimCurveBufferAccess CurveBufferAccess(Tracker.SourceSequence, Tracker.CurveName);
+	if (!CurveBufferAccess.IsValid()) return 0.f;
+
+	// Shamelessly took this idea for how to narrow in on a key and determine the curve value from
+	// Ryan Muoio's excellent Animation Matching Suite.
+	const int32 KeyCount = CurveBufferAccess.GetNumSamples();
+	if (KeyCount < 2)
+	{
+		return 0.f;
+	}
+		
+	int32 First = 1;
+	const int32 Last = KeyCount - 1;
+	int32 Count = Last - First;
+
+	while (Count > 0)
+	{
+		const int32 Step = Count / 2;
+		const int32 Middle = First + Step;
+
+		if (Tracker.AccumulatedTime * Tracker.PlayRate > CurveBufferAccess.GetTime(Middle))
+		{
+			First = Middle + 1;
+			Count -= Step + 1;
+		}
+		else
+		{
+			Count = Step;
+		}
+	}
+
+	const float KeyATime = CurveBufferAccess.GetTime(First - 1);
+	const float KeyBTime = CurveBufferAccess.GetTime(First);
+	const float Diff = KeyBTime - KeyATime;
+	const float Alpha = FMath::Clamp(!FMath::IsNearlyZero(Diff) ? (((Tracker.AccumulatedTime * Tracker.PlayRate) - KeyATime) / Diff) : 0.0f, 0.f, 1.f);
+
+	const float KeyAValue = CurveBufferAccess.GetValue(First - 1);
+	const float KeyBValue = CurveBufferAccess.GetValue(First);
+	
+	const float Result = FMath::Lerp(KeyAValue * Tracker.Scale, KeyBValue * Tracker.Scale, Alpha);
+	
+	return Result;
+}
+
+float UGMCE_MovementAnimInstance::CalculateScaledTurnInPlacePlayRate()
+{
+	float Result = 1.f;
+	if (TurnInPlaceTracker.SourceSequence != nullptr && !FMath::IsNearlyZero(MovementComponent->GetTurnInPlaceDuration()))
+	{
+		Result = TurnInPlaceTracker.SourceSequence->GetPlayLength() / MovementComponent->GetTurnInPlaceDuration();
+	}
+	TurnInPlaceTracker.PlayRate = Result;
+
+	return Result;
+}
+
+void UGMCE_MovementAnimInstance::InitializeTurnInPlaceTracker(UAnimSequence* Sequence, FName CurveName, float StartTime, float PlayRate)
+{
+	const float CurveValue = InitializeCurveTracker(TurnInPlaceTracker, Sequence, CurveName, StartTime, PlayRate, ComponentYawScale);
+
+	switch (TurnInPlaceCurveType)
+	{
+	case EGMCE_TurnInPlaceCurveType::RemainingTurnYaw:
+		TurnInPlaceYawCompleted = ComponentTargetYaw - CurveValue;
+		break;
+	case EGMCE_TurnInPlaceCurveType::CompletedTurnYaw:
+		TurnInPlaceYawCompleted = CurveValue;
+		break;
+	}
+
+	if (PlayRate == 0.f)
+	{
+		// Calculate play rate.
+		CalculateScaledTurnInPlacePlayRate();
+	}
+}
+
+void UGMCE_MovementAnimInstance::UpdateTurnInPlaceTracker(float DeltaTime)
+{
+	float CurveValue = 0.f;
+	
+	if (TurnInPlaceTracker.AccumulatedTime + DeltaTime > TurnInPlaceTracker.SourceSequence->GetPlayLength() / TurnInPlaceTracker.PlayRate)
+	{
+		// We've run past the end of the animation; ensure that our movement component knows we're done.
+		TurnInPlaceYawCompleted = ComponentTargetYaw;
+	}
+	else {
+		CurveValue = UpdateCurveTracker(TurnInPlaceTracker, DeltaTime);
+
+		switch (TurnInPlaceCurveType)
+		{
+		case EGMCE_TurnInPlaceCurveType::RemainingTurnYaw:
+			TurnInPlaceYawCompleted = ComponentTargetYaw - CurveValue;
+			break;
+		case EGMCE_TurnInPlaceCurveType::CompletedTurnYaw:
+			TurnInPlaceYawCompleted = CurveValue;
+			break;
+		}
+	}
+}
+
+float UGMCE_MovementAnimInstance::GetTrackedCurve(const FName CurveName) const
+{
+	float Value = 0.f;
+	GetTrackedCurve(CurveName, Value);
+	return Value;
+}
+
+bool UGMCE_MovementAnimInstance::GetTrackedCurve(const FName CurveName, float& OutValue) const
+{
+	if (CurveName == FName(TEXT("TurnInPlace")))
+	{
+		OutValue = TurnInPlaceYawCompleted;
+		return true;
+	}
+
+	OutValue = 0.f;
+	return false;
 }

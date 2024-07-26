@@ -1,9 +1,12 @@
 ﻿#include "Components/GMCE_OrganicMovementCmp.h"
 
+#include "GMCExtendedLog.h"
+#include "GMCE_TrackedCurveProvider.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Support/GMCE_UtilityLibrary.h"
 
+#define TURN_IN_PLACE_ENDPOINT 5.f
 
 // Sets default values for this component's properties
 UGMCE_OrganicMovementCmp::UGMCE_OrganicMovementCmp()
@@ -131,6 +134,32 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 				UpdateTrajectoryPrediction();
 			}
 		}
+
+		if (GetNetMode() != NM_Standalone && GetNetMode() != NM_DedicatedServer)
+		{
+			if (!FMath::IsNearlyZero(RootYawOffset, KINDA_SMALL_NUMBER) && !IsTurningInPlace())
+			{
+				// Smooth us back to where we should be.
+				RootYawBlendTime += DeltaTime;
+				if (FMath::Abs(RootYawOffset) < 2.f)
+				{
+					RootYawBlendTime = 1.f;
+				}
+				RootYawOffset = FMath::Lerp(RootYawOffset, 0.f, FMath::Clamp(RootYawBlendTime * 5.f, 0.f, 1.f));
+			}
+
+			if (!FMath::IsNearlyZero(RootYawOffset, KINDA_SMALL_NUMBER))
+			{
+				UE_LOG(LogGMCExtended, Log, TEXT("[%s] root yaw %f"), *GetNetRoleAsString(GetOwnerRole()), RootYawOffset);
+				GetSkeletalMeshReference()->SetRelativeRotation(FRotator(0.f, RootYawOffset - 90.f, 0.f));
+			}
+			else
+			{
+				GetSkeletalMeshReference()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+				RootYawBlendTime = 0.f;
+			}			
+		}
+
 	}
 	else
 	{
@@ -277,8 +306,40 @@ void UGMCE_OrganicMovementCmp::BindReplicationData_Implementation()
 		EGMC_CombineMode::CombineIfUnchanged,
 		EGMC_SimulationMode::PeriodicAndOnChange_Output,
 		EGMC_InterpolationFunction::NearestNeighbour
-	);	
+	);
+
+	BI_WantsTurnInPlace = BindBool(
+		bWantsTurnInPlace,
+		EGMC_PredictionMode::ClientAuth_Input,
+		EGMC_CombineMode::CombineIfUnchanged,
+		EGMC_SimulationMode::PeriodicAndOnChange_Output,
+		EGMC_InterpolationFunction::NearestNeighbour
+	);
 	
+	BI_TurnInPlaceDelayedDirection = BindCompressedVector(
+		TurnInPlaceDelayedDirection,
+		EGMC_PredictionMode::ClientAuth_Input,
+		EGMC_CombineMode::CombineIfUnchanged,
+		EGMC_SimulationMode::PeriodicAndOnChange_Output,
+		EGMC_InterpolationFunction::TargetValue
+	);
+
+	// BI_TurnInPlaceStartDirection = BindCompressedVector(
+	// 	TurnInPlaceStartDirection,
+	// 	EGMC_PredictionMode::ClientAuth_Input,
+	// 	EGMC_CombineMode::CombineIfUnchanged,
+	// 	EGMC_SimulationMode::PeriodicAndOnChange_Output,
+	// 	EGMC_InterpolationFunction::TargetValue
+	// );
+
+	BI_TurnToDirection = BindCompressedVector(
+		TurnToDirection,
+		EGMC_PredictionMode::ServerAuth_Output_ClientValidated,
+		EGMC_CombineMode::CombineIfUnchanged,
+		EGMC_SimulationMode::PeriodicAndOnChange_Output,
+		EGMC_InterpolationFunction::TargetValue
+	);
+
 	if (OnBindReplicationData.IsBound())
 	{
 		OnBindReplicationData.Execute();
@@ -310,6 +371,12 @@ void UGMCE_OrganicMovementCmp::PreMovementUpdate_Implementation(float DeltaSecon
 	RunSolvers(DeltaSeconds);	
 }
 
+void UGMCE_OrganicMovementCmp::PreSimulatedMoveExecution_Implementation(const FGMC_PawnState& InputState,
+	bool bCumulativeUpdate, float DeltaTime, double Timestamp)
+{
+	Super::PreSimulatedMoveExecution_Implementation(InputState, bCumulativeUpdate, DeltaTime, Timestamp);
+}
+
 void UGMCE_OrganicMovementCmp::MovementUpdate_Implementation(float DeltaSeconds)
 {
 	Super::MovementUpdate_Implementation(DeltaSeconds);
@@ -321,12 +388,14 @@ void UGMCE_OrganicMovementCmp::MovementUpdate_Implementation(float DeltaSeconds)
 		InputVelocityOffset = UGMCE_UtilityLibrary::GetAngleDifferenceXY(GetLinearVelocity_GMC(), GetProcessedInputVector());
 		CalculatedEffectiveAcceleration = GetTransientAcceleration();
 	}
+}
 
-	if (IsSimulatedProxy())
-	{
-		// If we're a simulated proxy, synthesize an acceleration value from past moves.
-		UpdateCalculatedEffectiveAcceleration();
-	}	
+void UGMCE_OrganicMovementCmp::MovementUpdateSimulated_Implementation(float DeltaSeconds)
+{
+	Super::MovementUpdateSimulated_Implementation(DeltaSeconds);
+
+	
+	
 }
 
 void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
@@ -334,15 +403,33 @@ void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
 	Super::GenSimulationTick_Implementation(DeltaTime);
 
 	// If we're being simulated, we should always synthesize an acceleration from past movements.
+	UpdateAnimationHelperValues(DeltaTime);
 	UpdateCalculatedEffectiveAcceleration();
+
+	UpdateTurnInPlaceState(true);
+	
+	if (bWantsTurnInPlace && (IsTurningInPlace() || TurnInPlaceState == EGMCE_TurnInPlaceState::Starting))
+	{
+		ApplyTurnInPlace(DeltaTime, true);
+	}
+
+	if (TurnInPlaceState == EGMCE_TurnInPlaceState::Running && !bWantsTurnInPlace && !IsSmoothedListenServerPawn())
+	{
+		EndTurnInPlace(true);
+	}
+	
+}
+
+void UGMCE_OrganicMovementCmp::GenPredictionTick_Implementation(float DeltaTime)
+{
+	Super::GenPredictionTick_Implementation(DeltaTime);
 	UpdateAnimationHelperValues(DeltaTime);
 }
 
 void UGMCE_OrganicMovementCmp::GenAncillaryTick_Implementation(float DeltaTime, bool bLocalMove,
-	bool bCombinedClientMove)
+                                                               bool bCombinedClientMove)
 {
 	Super::GenAncillaryTick_Implementation(DeltaTime, bLocalMove, bCombinedClientMove);
-	UpdateAnimationHelperValues(DeltaTime);
 }
 
 bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_FloorParams& Floor, float DeltaSeconds)
@@ -399,8 +486,19 @@ void UGMCE_OrganicMovementCmp::OnMovementModeChangedSimulated_Implementation(EGM
 	{
 		SetRagdollActive(false);
 	}
-	
+
 	Super::OnMovementModeChangedSimulated_Implementation(PreviousMovementMode);
+}
+
+void UGMCE_OrganicMovementCmp::PostMovementUpdate_Implementation(float DeltaSeconds)
+{
+	Super::PostMovementUpdate_Implementation(DeltaSeconds);
+}
+
+void UGMCE_OrganicMovementCmp::PostSimulatedMoveExecution_Implementation(const FGMC_PawnState& OutputState,
+	bool bCumulativeUpdate, float DeltaTime, double Timestamp)
+{
+	Super::PostSimulatedMoveExecution_Implementation(OutputState, bCumulativeUpdate, DeltaTime, Timestamp);
 }
 
 float UGMCE_OrganicMovementCmp::GetMaxSpeed() const
@@ -597,12 +695,13 @@ void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 		{
 			if (bOrientToControlRotationDirection)
 			{
+				UpdateTurnInPlaceState();
 				FVector ControlDirection = GetControllerRotation_GMC().Vector();
 				const float ControlAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(ControlDirection, UpdatedComponent->GetForwardVector()));
-				if (ControlAngle > FacingAngleOffsetThreshold)
+				if (ControlAngle > FacingAngleOffsetThreshold || IsTurningInPlace() || TurnInPlaceState == EGMCE_TurnInPlaceState::Starting)
 				{
 					Velocity = FVector::ZeroVector;
-					HandleTurnInPlace(DeltaSeconds);
+					CalculateTurnInPlace(DeltaSeconds);
 					return;
 				}
 			}
@@ -704,6 +803,12 @@ UPrimitiveComponent* UGMCE_OrganicMovementCmp::FindActorBase_Implementation()
 void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
                                              const FGMC_RootMotionVelocitySettings& RootMotionMetaData, float DeltaSeconds)
 {
+	if (bIsDirectBotMove)
+	{
+		Super::ApplyRotation(bIsDirectBotMove, RootMotionMetaData, DeltaSeconds);
+		return;
+	}
+	
 	// If we're orienting to velocity and either have no root motion or are applying rotation atop
 	// root motion, rotate towards the direction we're moving in.
 	if (bOrientToVelocityDirection && (!HasRootMotion() || RootMotionMetaData.bApplyRotationWithRootMotion))
@@ -729,9 +834,9 @@ void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
 		return;
 	}
 
-	if (bOrientToControlRotationDirection && TurnInPlaceDelay > 0.f && Velocity.IsNearlyZero() && (!HasRootMotion() || RootMotionMetaData.bApplyRotationWithRootMotion))
+	if (GetOwnerRole() != ROLE_SimulatedProxy && (IsTurningInPlace() || TurnInPlaceState == EGMCE_TurnInPlaceState::Starting || (bOrientToControlRotationDirection && TurnInPlaceDelay > 0.f && Velocity.IsNearlyZero() && (!HasRootMotion() || RootMotionMetaData.bApplyRotationWithRootMotion))))
 	{
-		HandleTurnInPlace(DeltaSeconds);
+		CalculateTurnInPlace(DeltaSeconds);
 		return;
 	}
 
@@ -742,91 +847,17 @@ void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
 
 #pragma region Animation Support
 
-void UGMCE_OrganicMovementCmp::MontageUpdate(float DeltaSeconds)
+void UGMCE_OrganicMovementCmp::PreProcessRootMotion(const FGMC_AnimMontageInstance& MontageInstance,
+	FRootMotionMovementParams& InOutRootMotionParams, float DeltaSeconds)
 {
-  bHasRootMotion = false;
-  
-  if (!SkeletalMesh || !MontageTracker.HasActiveMontage())
-  {
-    MontageTracker.ClearActiveMontage();
-    RootMotionParams.Clear();
-    return;
-  }
-
-  if (MontageTracker.bMontagePaused)
-  {
-    return;
-  }
-  
-  FGMC_AnimMontageInstance MontageInstance{MontageTracker.Montage, MontageTracker.MontagePosition, MontageTracker.MontagePlayRate, true};
-  
-  bool bFinishedBlendIn = false;
-  bool bStartedBlendOut = false;
-  
-  TArray<const FAnimNotifyEvent*> MontageNotifyBeginEvents{};
-  TArray<const FAnimNotifyEvent*> MontageNotifyEndEvents{};
-  
-  {
-    gmc_ck(MontageTracker.HasActiveMontage())
-    gmc_ck(!MontageTracker.bMontageEnded)
-    gmc_ck(!MontageTracker.bMontagePaused)
-  
-    MontageTracker.bMontageEnded = MontageInstance.Advance(
-      DeltaSeconds,
-      RootMotionParams,
-      bFinishedBlendIn,
-      bStartedBlendOut,
-      MontageNotifyBeginEvents,
-      MontageNotifyEndEvents
-    );
-  
-    MontageTracker.MontagePosition = MontageInstance.GetPosition();
-  }
-  
-  gmc_ck(MontageTracker.MontagePosition >= 0.)
-  gmc_ck(MontageTracker.MontagePosition <= MontageTracker.Montage->GetPlayLength())
-  
-  const FGMC_RootMotionExtractionSettings ExtractionSettings = GetRootMotionExtractionMetaData(MontageTracker.Montage);
-  
-  PreProcessRootMotion(MontageInstance, RootMotionParams, ExtractionSettings, DeltaSeconds);
-  
-  if (RootMotionParams.bHasRootMotion)
-  {
-    bHasRootMotion = true;
-  
-    // The root motion translation can be scaled by the user.
-    RootMotionParams.ScaleRootMotionTranslation(GetAnimRootMotionTranslationScale());
-  
-    // Root motion calculations from motion warping
-  	FTransform PreProcessedRootMotion;
-  	if (ProcessRootMotionPreConvertToWorld.IsBound())
-  	{
-  		PreProcessedRootMotion = ProcessRootMotionPreConvertToWorld.Execute(RootMotionParams.GetRootMotionTransform(), this, DeltaSeconds);
-  	}
-  	else
-  	{
-  		PreProcessedRootMotion = RootMotionParams.GetRootMotionTransform();
-  	}
-    const FTransform WorldSpaceRootMotionTransform = SkeletalMesh->ConvertLocalRootMotionToWorld(PreProcessedRootMotion);
-  
-    // Save the root motion transform in world space.
-    RootMotionParams.Set(WorldSpaceRootMotionTransform);
-  
-    // Calculate the root motion velocity from the world space root motion translation.
-    CalculateAnimRootMotionVelocity(ExtractionSettings, DeltaSeconds);
-  
-    // Apply the root motion rotation now. Translation is applied with the next update from the calculated velocity. Splitting root motion translation and
-    // rotation up like this may not be optimal but the alternative is to replicate the rotation for replay which is far more undesirable.
-    ApplyAnimRootMotionRotation(ExtractionSettings, DeltaSeconds);
-  }
-  
-  RootMotionParams.Clear();
-  
-  CallMontageEvents(MontageTracker, bFinishedBlendIn, bStartedBlendOut, MontageNotifyBeginEvents, MontageNotifyEndEvents, DeltaSeconds);
-  
-  gmc_ck(!MontageTracker.bStartedNewMontage)
-  gmc_ck(!MontageTracker.bMontageEnded)
-  gmc_ck(!MontageTracker.bInterruptedPreviousMontage)	
+	// If we've got a bound delegate to handle modifying root motion, call it. This is used by GMCExAnim to
+	// handle motion warping.
+	if (ProcessRootMotionPreConvertToWorld.IsBound())
+	{
+		InOutRootMotionParams.Set(ProcessRootMotionPreConvertToWorld.Execute(InOutRootMotionParams.GetRootMotionTransform(), this, DeltaSeconds));
+	}
+	
+	Super::PreProcessRootMotion(MontageInstance, InOutRootMotionParams, DeltaSeconds);
 }
 
 void UGMCE_OrganicMovementCmp::OnSyncDataApplied_Implementation(const FGMC_PawnState& State, EGMC_NetContext Context)
@@ -863,6 +894,7 @@ void UGMCE_OrganicMovementCmp::CalculateAimYawRemaining(const FVector& Direction
 
 	AimYawRemaining = UKismetMathLibrary::FindRelativeLookAtRotation(GetActorTransform(), GetActorLocation_GMC() + DirectionVector).Yaw;
 }
+
 #pragma endregion
 
 
@@ -1393,6 +1425,28 @@ FSolverState UGMCE_OrganicMovementCmp::GetSolverState() const
 }
 
 
+void UGMCE_OrganicMovementCmp::UpdateTurnInPlaceState(bool bSimulated)
+{
+	switch (TurnInPlaceState)
+	{
+	case EGMCE_TurnInPlaceState::Ready:
+		if (bWantsTurnInPlace && !(IsSmoothedListenServerPawn() && bSimulated))
+		{
+			TurnInPlaceState = EGMCE_TurnInPlaceState::Starting;
+		}
+		break;
+	case EGMCE_TurnInPlaceState::Starting:
+	case EGMCE_TurnInPlaceState::Running:
+		break;
+	case EGMCE_TurnInPlaceState::Done:
+		if (!bWantsTurnInPlace)
+		{
+			TurnInPlaceState = EGMCE_TurnInPlaceState::Ready;
+		}
+		break;
+	}
+}
+
 void UGMCE_OrganicMovementCmp::SetStrafingMovement(bool bStrafingEnabled)
 {
 	bOrientToVelocityDirection = !bStrafingEnabled;
@@ -1400,38 +1454,173 @@ void UGMCE_OrganicMovementCmp::SetStrafingMovement(bool bStrafingEnabled)
 	bOrientToControlRotationDirection = bStrafingEnabled;
 }
 
-void UGMCE_OrganicMovementCmp::HandleTurnInPlace(float DeltaSeconds)
+bool UGMCE_OrganicMovementCmp::ShouldTurnInPlace() const
 {
-	const float ControllerAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(TurnInPlaceDelayedDirection, UpdatedComponent->GetForwardVector()));
-	if (ControllerAngle >= FacingAngleOffsetThreshold || !TurnInPlaceDelayedDirection.IsZero())
+	if (TurnInPlaceType == EGMCE_TurnInPlaceType::None || TurnInPlaceDelay == 0.f || TurnInPlaceRotationRate == 0.f) return false;
+
+	return true;
+}
+
+void UGMCE_OrganicMovementCmp::CalculateTurnInPlace(float DeltaSeconds)
+{
+	SV_SwapServerState();
+	const FVector ControllerForward = UKismetMathLibrary::Conv_RotatorToVector(GetControllerRotation_GMC());
+	const float ControllerAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(ControllerForward, UpdatedComponent->GetForwardVector()));
+	SV_SwapServerState();
+
+	if (!bWantsTurnInPlace && TurnInPlaceState == EGMCE_TurnInPlaceState::Ready && ControllerAngle >= FacingAngleOffsetThreshold &&
+		(GetOwnerRole() == ROLE_Authority || GetOwnerRole() == ROLE_AutonomousProxy || GetNetMode() == NM_Standalone))
 	{
-		TurnInPlaceSecondsAccumulated += DeltaSeconds;
+		// We aren't (yet) turning in place, but we are past our threshold angle.
+		
+		if (GetCurrentAimYawRate() < UE_KINDA_SMALL_NUMBER)
+		{
+			// We're no longer rotating, so we can start accumulating our delay.
+			TurnInPlaceSecondsAccumulated += DeltaSeconds;
+		}
+		else
+		{
+			// If we're still spinning the controller, reset our accumulated delay.
+			TurnInPlaceSecondsAccumulated = 0.f;
+		}
 			
 		if (TurnInPlaceSecondsAccumulated >= TurnInPlaceDelay || IsInputPresent())
 		{
-			if (TurnInPlaceDelayedDirection.IsZero() || IsInputPresent())
-			{
-				TurnInPlaceDelayedDirection = GetControllerRotation_GMC().Vector() * FVector(1.f, 1.f, 0.f);
-			}
-			ComponentYawRemaining = UGMCE_UtilityLibrary::GetAngleDifferenceXY(TurnInPlaceDelayedDirection, UpdatedComponent->GetForwardVector());
-			
-			if (bUseSafeRotations)
-			{
-				RotateYawTowardsDirectionSafe(TurnInPlaceDelayedDirection, RotationRate, DeltaSeconds);				
-			}
-			else
-			{
-				RotateYawTowardsDirection(TurnInPlaceDelayedDirection, RotationRate, DeltaSeconds);
-			}
-
-			if (ControllerAngle < 2.f)
-			{
-				TurnInPlaceSecondsAccumulated = 0.f;
-				TurnInPlaceDelayedDirection = FVector::ZeroVector;
-			}
+			SV_SwapServerState();
+			// We have exceeded our turn-in-place delay, or input is now present.
+			// Either way, record our start and end points and let's get this show on the road.
+			bWantsTurnInPlace = true;
+			TurnInPlaceDelayedDirection = GetControllerRotation_GMC().Vector().GetSafeNormal2D();
+			SV_SwapServerState();
+		}
+	}
+	else if (TurnInPlaceState == EGMCE_TurnInPlaceState::Running || TurnInPlaceState == EGMCE_TurnInPlaceState::Starting)
+	{
+		ApplyTurnInPlace(DeltaSeconds, false);
+		if (FMath::Abs(ComponentYawRemaining) < TURN_IN_PLACE_ENDPOINT || (!bWantsTurnInPlace && FMath::Abs(ComponentYawRemaining) < 15.f))
+		{
+			EndTurnInPlace();
 		}
 	}
 }
+
+void UGMCE_OrganicMovementCmp::ApplyTurnInPlace(float DeltaSeconds, bool bSimulated)
+{
+	if (TurnInPlaceState == EGMCE_TurnInPlaceState::Done || TurnInPlaceState == EGMCE_TurnInPlaceState::Ready) return;
+
+	if (TurnInPlaceState == EGMCE_TurnInPlaceState::Starting)
+	{
+		if (!IsSmoothedListenServerPawn() || bSimulated)
+		{
+			TurnInPlaceStartDirection = UpdatedComponent->GetForwardVector();
+			TurnInPlaceTotalYaw = ComponentYawRemaining = UGMCE_UtilityLibrary::GetAngleDifferenceXY(UpdatedComponent->GetForwardVector(), TurnInPlaceDelayedDirection);
+			TurnInPlaceLastYaw = 0.f;
+			TurnInPlaceState = EGMCE_TurnInPlaceState::Running;
+		}
+	}
+	
+	if (GetOwnerRole() == ROLE_SimulatedProxy && TurnInPlaceType == EGMCE_TurnInPlaceType::MovementComponent)
+	{
+		// We always at least want a component yaw remaining value for our simulated proxy.
+		ComponentYawRemaining = UGMCE_UtilityLibrary::GetAngleDifferenceXY(UpdatedComponent->GetForwardVector(), TurnInPlaceDelayedDirection);
+		return;
+	}
+
+	bool bHasValidCurve = false;
+	float CurveValue = 0.f;
+
+	const UAnimInstance* AnimInstance = GetSkeletalMeshReference()->GetAnimInstance();
+	if (TurnInPlaceType == EGMCE_TurnInPlaceType::TrackedCurveValue && IsValid(AnimInstance))
+	{
+		const IGMCE_TrackedCurveProvider* CurveProvider = Cast<IGMCE_TrackedCurveProvider>(AnimInstance);
+		if (CurveProvider != nullptr)
+		{
+			bHasValidCurve = true;
+			CurveValue = CurveProvider->GetTrackedCurve(FName(TEXT("TurnInPlace")));
+		}
+	}
+	
+	// We only handle rotations if we're on an autonomous proxy or the authority, and for the authority we cannot
+	// be the simulation cycle of a smoothed listen server pawn. Standalone rotation is also handled separately.
+	if (!bHasValidCurve || (GetOwnerRole() != ROLE_SimulatedProxy && GetNetMode() != NM_Standalone && (!IsSmoothedListenServerPawn() || !bSimulated)))
+	{
+		// Either we're using movement component logic, OR we didn't have a valid curve we were supposed to use.
+		if (bUseSafeRotations)
+		{
+			RotateYawTowardsDirectionSafe(TurnInPlaceDelayedDirection, TurnInPlaceRotationRate, DeltaSeconds);				
+		}
+		else
+		{
+			RotateYawTowardsDirection(TurnInPlaceDelayedDirection, TurnInPlaceRotationRate, DeltaSeconds);
+		}
+	}
+	
+	if (bHasValidCurve)
+	{
+		// We have a valid curve. Determine how we use the curve.
+		float YawChange = 0.f;
+
+		if (TurnInPlaceType == EGMCE_TurnInPlaceType::TrackedCurveValue)
+		{
+			YawChange = CurveValue - TurnInPlaceLastYaw;
+			TurnInPlaceLastYaw = CurveValue;
+		}
+
+		if (GetNetMode() == NM_Standalone)
+		{
+			// If we're standalone, utilize the curve value directly. Easy.
+			const FRotator DeltaRotation = FRotator( 0.f, YawChange, 0.f);
+			UpdatedComponent->AddLocalRotation(DeltaRotation);
+		}
+		else
+		{
+			// No point on messing with the mesh component on a dedicated server, or our non-simulated side
+			// of a smoothed pawn.
+			if (GetNetMode() != NM_DedicatedServer && TurnInPlaceState == EGMCE_TurnInPlaceState::Running && !(IsSmoothedListenServerPawn() && !bSimulated))
+			{
+				// Offset our skeletal mesh component to keep the animation smooth.
+				const float YawOffsetFromStart = UGMCE_UtilityLibrary::GetAngleDifferenceXY(TurnInPlaceStartDirection, UpdatedComponent->GetForwardVector());
+				RootYawOffset = (CurveValue - YawOffsetFromStart);
+				// if (TurnInPlaceTotalYaw < 0.f)
+				// {
+				// 	RootYawOffset = FMath::Clamp(RootYawOffset, TurnInPlaceTotalYaw, 0.f);
+				// }
+				// else
+				// {
+				// 	RootYawOffset = FMath::Clamp(RootYawOffset, 0.f, TurnInPlaceTotalYaw);					
+				// }
+			}
+		}
+	}
+
+	if (!IsSmoothedListenServerPawn() || bSimulated)
+	{
+		ComponentYawRemaining = UGMCE_UtilityLibrary::GetAngleDifferenceXY(UpdatedComponent->GetForwardVector(), TurnInPlaceDelayedDirection);
+	}
+
+}
+
+void UGMCE_OrganicMovementCmp::EndTurnInPlace(bool bSimulated)
+{
+	if (TurnInPlaceState != EGMCE_TurnInPlaceState::Running) return;
+	
+	TurnInPlaceSecondsAccumulated = 0.f;
+	TurnInPlaceStartDirection = FVector::ZeroVector;
+	TurnInPlaceDelayedDirection = FVector::ZeroVector;
+	TurnInPlaceState = EGMCE_TurnInPlaceState::Done;
+	if (!IsSimulatedProxy()) bWantsTurnInPlace = false;	// Rely on replication to reset?
+}
+
+float UGMCE_OrganicMovementCmp::GetTurnInPlaceDuration() const
+{
+	if (TurnInPlaceState == EGMCE_TurnInPlaceState::Done || TurnInPlaceState == EGMCE_TurnInPlaceState::Ready || TurnInPlaceRotationRate == 0.f || TurnInPlaceType == EGMCE_TurnInPlaceType::None) return 0.f;
+
+	const FRotator Rounded = RoundRotator(FRotator(0.f, ComponentYawRemaining, 0.f), EGMC_FloatPrecisionBlueprint::TwoDecimals);
+	const float Result = (FMath::Abs(Rounded.Yaw) / TurnInPlaceRotationRate) * (GetNetMode() == NM_Standalone ? 2.f : 1.8f); // I wish I knew why 1.8 was a magic number that made this work smoothly.
+
+	return Result;
+}
+
 
 float UGMCE_OrganicMovementCmp::CalculateDirection(const FVector& Direction, const FRotator& BaseRotation)
 {
