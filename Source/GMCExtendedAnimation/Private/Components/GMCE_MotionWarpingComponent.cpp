@@ -250,6 +250,13 @@ void UGMCE_MotionWarpingComponent::BeginPlay()
 	if (MotionWarpSubject)
 	{
 		MovementComponent = MotionWarpSubject->GetGMCExMovementComponent();
+		if (!MovementComponent)
+		{
+			// Things might've been added in blueprint that we couldn't previously obtain.
+			MotionWarpSubject->MotionWarping_RecacheValues();
+			MovementComponent = MotionWarpSubject->GetGMCExMovementComponent();
+		}
+		
 		if (MovementComponent)
 		{
 			MovementComponent->ProcessRootMotionPreConvertToWorld.BindUObject(this, &UGMCE_MotionWarpingComponent::ProcessRootMotion);

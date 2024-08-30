@@ -22,6 +22,11 @@ FVector IGMCE_MotionWarpSubject::MotionWarping_GetTranslationOffset() const
 	return FVector::ZeroVector;
 }
 
+void IGMCE_MotionWarpSubject::MotionWarping_RecacheValues()
+{
+	
+}
+
 FAnimMontageInstance* IGMCE_MotionWarpSubject::GetRootMotionAnimMontageInstance(
 	USkeletalMeshComponent* MeshComponent) const
 {

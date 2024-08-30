@@ -23,6 +23,7 @@ public:
 	virtual float MotionWarping_GetCollisionHalfHeight() const override;
 	virtual FQuat MotionWarping_GetRotationOffset() const override;
 	virtual FVector MotionWarping_GetTranslationOffset() const override;
+	virtual void MotionWarping_RecacheValues() override;
 	virtual FAnimMontageInstance* GetRootMotionAnimMontageInstance(USkeletalMeshComponent* MeshComponent) const override;
 	virtual UGMCE_OrganicMovementCmp* GetGMCExMovementComponent() const override;
 

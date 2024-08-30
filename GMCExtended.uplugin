@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.2",
+	"VersionName": "1.21",
 	"FriendlyName": "GMCExtended",
 	"Description": "A collection of utilities and more-specialized components for GMCv2, things beyond the scope of the base plugin but not directly tied to the Ability System.",
 	"Category": "GMC",
