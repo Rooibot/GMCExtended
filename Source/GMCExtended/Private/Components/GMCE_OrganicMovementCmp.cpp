@@ -1158,12 +1158,17 @@ FGMCE_MovementSample UGMCE_OrganicMovementCmp::GetMovementSampleFromCurrentState
 	// CurrentTransform.SetLocation(CurrentLocation);
 
 	FTransform CurrentTransform;
-	if (bTrajectoryUsesMesh)
+	if (bTrajectoryUsesMesh && SkeletalMesh)
 	{
 		CurrentTransform = SkeletalMesh->GetComponentTransform();
 	}
 	else
 	{
+		if (bTrajectoryUsesMesh)
+		{
+			// We are only here if Skeletal Mesh is null.
+			UE_LOG(LogGMCExtended, Warning, TEXT("%s has no skeletal mesh but bTrajectoryUsesMesh is true. Reverting to using collision capsule for trajectory."), *GetName())
+		}
 		CurrentTransform = GetPawnOwner()->GetActorTransform();
 		const FVector CurrentLocation = GetLowerBound();
 		CurrentTransform.SetLocation(CurrentLocation);
