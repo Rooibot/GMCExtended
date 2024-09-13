@@ -1140,7 +1140,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 void UGMCE_OrganicMovementCmp::UpdateTrajectoryPrediction()
 {
 	FTransform OriginTransform;
-	if (bTrajectoryUsesMesh)
+	if (bTrajectoryUsesMesh && IsValid(SkeletalMesh))
 	{
 		OriginTransform = SkeletalMesh->GetComponentTransform();
 	}
