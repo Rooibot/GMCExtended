@@ -58,7 +58,7 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (bResetMesh)
+	if (bResetMesh && IsValid(SkeletalMesh))
 	{
 		UPrimitiveComponent* CollisionComponent = Cast<UPrimitiveComponent>(UpdatedComponent);
 		if (IsValid(CollisionComponent))
@@ -68,6 +68,7 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 			if (IsRemotelyControlledListenServerPawn())
 			{
 				SV_SwapServerState();
+				CollisionComponent->SetCollisionEnabled(ECollisionEnabled::Type::QueryAndPhysics);
 				SetRootCollisionHalfHeight(PreviousCollisionHalfHeight, true, false);
 				SV_SwapServerState();
 			}
@@ -77,14 +78,18 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 		SkeletalMesh->ResetAllBodiesSimulatePhysics();
 		SkeletalMesh->AttachToComponent(GetPawnOwner()->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
 		SkeletalMesh->SetRelativeLocationAndRotation(PreviousRelativeMeshLocation, PreviousRelativeMeshRotation, false, nullptr, ETeleportType::ResetPhysics);
+
+		RagdollInitialComponentOffset = FVector::ZeroVector;
 		
 		SetComponentToSmooth(GetSkeletalMeshReference());
 		bResetMesh = false;
 	}
-	else if (GetMovementMode() == GetRagdollMode())
+	else if (GetMovementMode() == GetRagdollMode() && IsValid(SkeletalMesh))
 	{
 		if (bFirstRagdollTick)
 		{
+			RagdollInitialComponentOffset = SkeletalMesh->GetRelativeLocation();
+			
 			// Disable smoothing on simulated proxies, since it'll just make Unreal complain.
 			SetComponentToSmooth(nullptr);
 
@@ -104,41 +109,32 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 					SV_SwapServerState();							
 				}
 			}
-
-			SkeletalMesh->SetAllBodiesBelowSimulatePhysics(RagdollBoneName, true, true);
+			SkeletalMesh->SetAllBodiesSimulatePhysics(true);
 			SkeletalMesh->SetAllBodiesBelowLinearVelocity(RagdollBoneName, RagdollLinearVelocity, true);
 
 			LastRagdollBonePosition = SkeletalMesh->GetBoneLocation(RagdollBoneName);
 			LastRagdollTime = GetWorld()->GetTime().GetRealTimeSeconds();
 
-			UE_LOG(LogGMCExtended, Log, TEXT("[%s on %s] starting at %s going %s"), *GetNetRoleAsString(GetOwnerRole()), *GetNetModeAsString(GetNetMode()),
-				*LastRagdollBonePosition.ToCompactString(), *RagdollLinearVelocity.ToCompactString())
-			
 			bFirstRagdollTick = false;
 		}
-		else if (bShouldReplicateRagdoll)
+		else if (bShouldReplicateRagdoll && !CurrentRagdollGoal.IsZero())
 		{
-			const FVector BoneLocation = SkeletalMesh->GetBoneLocation(RagdollBoneName);
-			const FVector BoneDelta = CurrentRagdollGoal - BoneLocation;
+			FVector PelvisLocation = SkeletalMesh->GetBoneLocation(RagdollBoneName);
+			FVector PelvisTarget = GetActorLocation_GMC();
+			PelvisTarget.Z = PelvisLocation.Z;
+			
+			const FVector BoneDelta = PelvisTarget - PelvisLocation;
+			const FVector PelvisOffset = SkeletalMesh->GetBoneLocation(RagdollBoneName) - SkeletalMesh->GetComponentLocation();
+			const FVector ComponentTarget = PelvisTarget - PelvisOffset;
 
-			if (!bRagdollStopped && (!CurrentRagdollGoal.IsZero() && BoneDelta.Length() > 5.f))
+			if (!bRagdollStopped && BoneDelta.Length() > KINDA_SMALL_NUMBER)
 			{
-				// Figure out what needs to be done to shift the pelvis to match, if needed.
-				const double CurrentTime = GetWorld()->GetTime().GetRealTimeSeconds();
-				const FVector ComponentLocation = SkeletalMesh->GetComponentLocation();
-				const FVector PelvisToComponent = SkeletalMesh->GetComponentLocation() - BoneLocation;
-				const FVector FinalDelta = BoneDelta - PelvisToComponent;
-				const FVector FinalComponentLocation = ComponentLocation + FinalDelta;
-
-				UE_LOG(LogGMCExtended, Log, TEXT("[%s] Ragdoll bone at %s, should be %s -- component %s, delta %s, final %s"), *GetNetRoleAsString(GetOwnerRole()), *BoneLocation.ToCompactString(), *CurrentRagdollGoal.ToCompactString(), *ComponentLocation.ToCompactString(), *FinalDelta.ToCompactString(), *FinalComponentLocation.ToCompactString())
+				UE_LOG(LogGMCExtended, Log, TEXT("[%s] %s -> %s | %s (%f)"), *GetNetModeAsString(GetNetMode()), *SkeletalMesh->GetComponentLocation().ToCompactString(), *ComponentTarget.ToCompactString(), *CurrentRagdollGoal.ToCompactString(), BoneDelta.Length());
+				DrawDebugSphere(GetWorld(), SkeletalMesh->GetComponentLocation(), 25.f, 12, FColor::Black, false, 1.f, 0, 2.f);
+				DrawDebugSphere(GetWorld(), ComponentTarget, 25.f, 12, FColor::White, false, 1.f, 0, 2.f);
 				
-				if (!SkeletalMesh->MoveComponent(FinalDelta, SkeletalMesh->GetComponentQuat(), false, nullptr, MOVECOMP_NoFlags, ETeleportType::ResetPhysics))
-				{
-					UE_LOG(LogGMCExtended, Log, TEXT("Uhoh"))
-				}
-
-				LastRagdollBonePosition = BoneLocation;
-				LastRagdollTime = CurrentTime;					
+				// Figure out what needs to be done to shift the pelvis to match, if needed.
+				SkeletalMesh->SetWorldLocation(ComponentTarget, false, nullptr, ETeleportType::TeleportPhysics);
 			}
 		}
 	}
@@ -232,7 +228,7 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 		if (bTrajectoryEnabled)
 		{
 			FTransform OriginTransform;
-			if (bTrajectoryUsesMesh)
+			if (bTrajectoryUsesMesh && SkeletalMesh)
 			{
 				OriginTransform = SkeletalMesh->GetComponentTransform();
 			}
@@ -585,7 +581,7 @@ float UGMCE_OrganicMovementCmp::GetMaxSpeed() const
 
 void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 {
-	if (GetMovementMode() == GetRagdollMode() && bShouldReplicateRagdoll)
+	if (GetMovementMode() == GetRagdollMode() && bShouldReplicateRagdoll && IsValid(SkeletalMesh))
 	{
 		const bool bIsBoneAuthority = IsRagdollBoneAuthority();
 		
@@ -626,10 +622,17 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 				// overall effect smooth.
 				const FVector Delta = NewLocation - UpdatedComponent->GetComponentLocation();
 		
-				if (Delta.Size() > 0.5f)
+				if (Delta.Size() > KINDA_SMALL_NUMBER)
 				{
+					const FVector MeshLocation = SkeletalMesh->GetComponentLocation();
+					const FVector PelvisLocation = SkeletalMesh->GetBoneLocation(RagdollBoneName);
+
+					DrawDebugSphere(GetWorld(), PelvisLocation, 20.f, 12, FColor::Blue, false, 1.f, 0, 2.f);
+					
+					// Shift the capsule to match our bone location, and counteract it by shifting our skeletal mesh component relative.
 					FHitResult GroundResult;
-					SafeMoveUpdatedComponent(Delta, UpdatedComponent->GetComponentQuat(), false, GroundResult);
+					SafeMoveUpdatedComponent(NewLocation - UpdatedComponent->GetComponentLocation(), UpdatedComponent->GetComponentQuat(), false, GroundResult, ETeleportType::TeleportPhysics);
+					// SkeletalMesh->SetWorldLocation(MeshLocation, false, nullptr, ETeleportType::TeleportPhysics);
 				}
 			}
 		}
@@ -1156,7 +1159,7 @@ FGMCE_MovementSample UGMCE_OrganicMovementCmp::GetMovementSampleFromCurrentState
 	// CurrentTransform.SetLocation(CurrentLocation);
 
 	FTransform CurrentTransform;
-	if (bTrajectoryUsesMesh && SkeletalMesh)
+	if (bTrajectoryUsesMesh && IsValid(SkeletalMesh))
 	{
 		CurrentTransform = SkeletalMesh->GetComponentTransform();
 	}
@@ -1309,6 +1312,11 @@ void UGMCE_OrganicMovementCmp::SetRagdollActive(bool bActive)
 			PreviousRelativeMeshRotation = SkeletalMesh->GetRelativeRotation();
 		}
 		HaltMovement();
+	}
+	else
+	{
+		CurrentRagdollGoal = FVector::ZeroVector;
+		bRagdollStopped = true;
 	}
 
 	bEnablePhysicsInteraction = !bActive;

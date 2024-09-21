@@ -510,6 +510,7 @@ public:
 
 	FVector LastRagdollBonePosition { 0.f };
 	double LastRagdollTime { 0 };
+	FVector RagdollInitialComponentOffset { 0.f };
 	
 private:
 
