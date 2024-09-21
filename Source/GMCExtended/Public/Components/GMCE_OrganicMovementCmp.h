@@ -503,20 +503,29 @@ public:
 	/// false if you want to just use ragdoll animations on death and will be respawning afterwards.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ragdoll")
 	bool bShouldReplicateRagdoll { true };
-
+	
 	/// The bone to use for ragdolling.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Ragdoll")
-	FName RagdollBoneName = FName(TEXT("pelvis"));	
+	FName RagdollBoneName = FName(TEXT("pelvis"));
+
+	FVector LastRagdollBonePosition { 0.f };
+	double LastRagdollTime { 0 };
+	FVector RagdollInitialComponentOffset { 0.f };
 	
 private:
 
 	void SetRagdollActive(bool bActive);
+
+	bool IsRagdollBoneAuthority() const;
 
 	int32 BI_ShouldReplicateRagdoll { -1 };
 	int32 BI_RagdollBoneName { -1 };
 
 	FVector CurrentRagdollGoal { 0.f };
 	int32 BI_CurrentRagdollGoal { -1 };
+
+	bool bRagdollStopped { false };
+	int32 BI_RagdollStopped { -1 };
 	
 	bool bWantsRagdoll { false };
 	int32 BI_WantsRagdoll { -1 };
