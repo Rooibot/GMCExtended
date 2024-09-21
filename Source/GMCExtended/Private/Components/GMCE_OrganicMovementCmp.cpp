@@ -76,6 +76,7 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 
 		SkeletalMesh->SetAllBodiesSimulatePhysics(false);
 		SkeletalMesh->ResetAllBodiesSimulatePhysics();
+		SkeletalMesh->SetAbsolute(false, false, false);
 		SkeletalMesh->AttachToComponent(GetPawnOwner()->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
 		SkeletalMesh->SetRelativeLocationAndRotation(PreviousRelativeMeshLocation, PreviousRelativeMeshRotation, false, nullptr, ETeleportType::ResetPhysics);
 
@@ -111,6 +112,7 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 			}
 			SkeletalMesh->SetAllBodiesSimulatePhysics(true);
 			SkeletalMesh->SetAllBodiesBelowLinearVelocity(RagdollBoneName, RagdollLinearVelocity, true);
+			SkeletalMesh->SetAbsolute(true, false, false);
 
 			LastRagdollBonePosition = SkeletalMesh->GetBoneLocation(RagdollBoneName);
 			LastRagdollTime = GetWorld()->GetTime().GetRealTimeSeconds();
@@ -129,10 +131,6 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 
 			if (!bRagdollStopped && BoneDelta.Length() > KINDA_SMALL_NUMBER)
 			{
-				UE_LOG(LogGMCExtended, Log, TEXT("[%s] %s -> %s | %s (%f)"), *GetNetModeAsString(GetNetMode()), *SkeletalMesh->GetComponentLocation().ToCompactString(), *ComponentTarget.ToCompactString(), *CurrentRagdollGoal.ToCompactString(), BoneDelta.Length());
-				DrawDebugSphere(GetWorld(), SkeletalMesh->GetComponentLocation(), 25.f, 12, FColor::Black, false, 1.f, 0, 2.f);
-				DrawDebugSphere(GetWorld(), ComponentTarget, 25.f, 12, FColor::White, false, 1.f, 0, 2.f);
-				
 				// Figure out what needs to be done to shift the pelvis to match, if needed.
 				SkeletalMesh->SetWorldLocation(ComponentTarget, false, nullptr, ETeleportType::TeleportPhysics);
 			}
@@ -615,7 +613,7 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 
 				if (GroundHit.bBlockingHit)
 				{
-					NewLocation.Z = FMath::Max(UpdatedComponent->GetComponentLocation().Z, GroundHit.ImpactPoint.Z + PreviousCollisionHalfHeight);
+					NewLocation.Z = FMath::Min(UpdatedComponent->GetComponentLocation().Z, GroundHit.ImpactPoint.Z + PreviousCollisionHalfHeight);
 				}
 				
 				// Move our character to stay with the pelvis. We do this on the client, too, to make the
@@ -624,15 +622,8 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 		
 				if (Delta.Size() > KINDA_SMALL_NUMBER)
 				{
-					const FVector MeshLocation = SkeletalMesh->GetComponentLocation();
-					const FVector PelvisLocation = SkeletalMesh->GetBoneLocation(RagdollBoneName);
-
-					DrawDebugSphere(GetWorld(), PelvisLocation, 20.f, 12, FColor::Blue, false, 1.f, 0, 2.f);
-					
-					// Shift the capsule to match our bone location, and counteract it by shifting our skeletal mesh component relative.
 					FHitResult GroundResult;
 					SafeMoveUpdatedComponent(NewLocation - UpdatedComponent->GetComponentLocation(), UpdatedComponent->GetComponentQuat(), false, GroundResult, ETeleportType::TeleportPhysics);
-					// SkeletalMesh->SetWorldLocation(MeshLocation, false, nullptr, ETeleportType::TeleportPhysics);
 				}
 			}
 		}
