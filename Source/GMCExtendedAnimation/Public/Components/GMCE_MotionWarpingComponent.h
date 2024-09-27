@@ -189,6 +189,8 @@ public:
 
 	const FGMCE_MotionWarpTargetContainer& GetWarpTargets() const { return WarpTargetContainerInstance.Get<FGMCE_MotionWarpTargetContainer>(); }
 	
+	void BindToMovementComponent();
+
 protected:
 
 	// We use BeginPlay rather than InitializeComponent so that we know we can pick up components if they were

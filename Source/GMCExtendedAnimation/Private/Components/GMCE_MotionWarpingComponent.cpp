@@ -247,7 +247,12 @@ void UGMCE_MotionWarpingComponent::BeginPlay()
 	
 	OwningPawn = Cast<AGMC_Pawn>(GetOwner());
 	MotionWarpSubject = Cast<IGMCE_MotionWarpSubject>(OwningPawn);
-	if (MotionWarpSubject)
+	BindToMovementComponent();
+}
+
+void UGMCE_MotionWarpingComponent::BindToMovementComponent()
+{
+	if (MotionWarpSubject && !MovementComponent)
 	{
 		MovementComponent = MotionWarpSubject->GetGMCExMovementComponent();
 		if (!MovementComponent)
@@ -261,7 +266,7 @@ void UGMCE_MotionWarpingComponent::BeginPlay()
 		{
 			MovementComponent->ProcessRootMotionPreConvertToWorld.BindUObject(this, &UGMCE_MotionWarpingComponent::ProcessRootMotion);
 		}
-	}
+	}	
 }
 
 FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InTransform,
