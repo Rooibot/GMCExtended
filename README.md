@@ -35,7 +35,7 @@ This is an extension of the above `UGCME_CoreComponent`, adding a few things:
 [![Trajectory example video](http://img.youtube.com/vi/y0oFou7ww64/0.jpg)](https://www.youtube.com/watch?v=y0oFou7ww64)
 
 **Ragdoll:**  
-[![Ragdoll example video](http://img.youtube.com/vi/Vipoc2ISJp0/0.jpg)](https://www.youtube.com/watch?v=Vipoc2ISJp0)
+[![Ragdoll example video](http://img.youtube.com/vi/6Zn3mx__sKc/0.jpg)](https://www.youtube.com/watch?v=6Zn3mx__sKc)
 
 Some details...
 
