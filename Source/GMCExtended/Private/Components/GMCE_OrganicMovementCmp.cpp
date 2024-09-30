@@ -270,6 +270,17 @@ void UGMCE_OrganicMovementCmp::BindReplicationData_Implementation()
 		EGMC_InterpolationFunction::Linear
 	);
 
+	/// Vector representing our last landing impact. This is replicated so that
+	/// simulated proxies can determine whether to play 'heavy' or 'light' land
+	/// animations.
+	BI_LastLandingVelocity = BindCompressedVector(
+		LastLandingVelocity,
+		EGMC_PredictionMode::ServerAuth_Output_ClientValidated,
+		EGMC_CombineMode::CombineIfUnchanged,
+		EGMC_SimulationMode::PeriodicAndOnChange_Output,
+		EGMC_InterpolationFunction::NearestNeighbour
+	);
+
 	// Bool representing whether we want to go into ragdoll mode or not.
 	BI_WantsRagdoll = BindBool(
 		bWantsRagdoll,
@@ -763,6 +774,14 @@ void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 		TurnInPlaceSecondsAccumulated = 0.f;
 		TurnInPlaceDelayedDirection = FVector::ZeroVector;
 	}
+}
+
+void UGMCE_OrganicMovementCmp::OnLanded_Implementation(const FVector& ImpactVelocity)
+{
+	Super::OnLanded_Implementation(ImpactVelocity);
+
+	// Store our impact velocity for purposes of animation.
+	LastLandingVelocity = ImpactVelocity;
 }
 
 void UGMCE_OrganicMovementCmp::RotateYawTowardsDirection(const FVector& Direction, float Rate, float DeltaTime)

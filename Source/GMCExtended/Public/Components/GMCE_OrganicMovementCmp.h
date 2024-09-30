@@ -84,6 +84,8 @@ public:
 	virtual float GetInputAccelerationCustom_Implementation() const override;
 	virtual void CalculateVelocity(float DeltaSeconds) override;
 
+	virtual void OnLanded_Implementation(const FVector& ImpactVelocity) override;
+
 	virtual void RotateYawTowardsDirection(const FVector& Direction, float Rate, float DeltaTime) override;
 	virtual bool RotateYawTowardsDirectionSafe(const FVector& Direction, float Rate, float DeltaTime) override;
 
@@ -260,6 +262,10 @@ protected:
 	FVector CurrentAnimationAcceleration { 0.f };
 
 	FVector LastAnimationVelocity { 0.f };
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	FVector LastLandingVelocity { 0.f };
+	int32 BI_LastLandingVelocity { -1 };
 	
 #pragma endregion
 	
