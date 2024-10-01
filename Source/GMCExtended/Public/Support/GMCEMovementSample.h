@@ -5,6 +5,14 @@
 #include "PoseSearch/PoseSearchTrajectoryTypes.h"
 #include "GMCEMovementSample.generated.h"
 
+UENUM()
+enum class EGMCE_TrajectoryRotationType : uint8
+{
+	Component,
+	Controller,
+	MeshOffset
+};
+
 USTRUCT(BlueprintType)
 struct GMCEXTENDED_API FGMCE_MovementSample
 {
@@ -29,7 +37,16 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 	FRotator ActorWorldRotation { FRotator::ZeroRotator };
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
+	FTransform ActorWorldTransform { FTransform::Identity };
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
 	FRotator ActorDeltaRotation { FRotator::ZeroRotator };
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
+	FQuat MeshComponentRelativeRotation { FQuat::Identity };
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
+	FRotator ControllerRotation { FRotator::ZeroRotator };
 
 	/// Used only when displaying the debug trajectory. This is not fenced by
 	/// WITH_EDITORDATA_ONLY checks so that the value can be set in other code
@@ -50,14 +67,27 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 
 	FGMCE_MovementSample() {};
 
-	FRotator GetRotationVelocityFrom(const FGMCE_MovementSample& OtherSample) const
+	FRotator GetRotationVelocityFrom(const FGMCE_MovementSample& OtherSample, const EGMCE_TrajectoryRotationType& RotationType) const
 	{
 		if ( Equals(OtherSample, true) ) return FRotator::ZeroRotator;
-	
+
 		const float TimeRatio = 1.f / ( AccumulatedSeconds - OtherSample.AccumulatedSeconds );
-	
+
+		FRotator Delta;
+		switch (RotationType)
+		{
+		case EGMCE_TrajectoryRotationType::Component:
+			Delta = (WorldTransform.GetRotation().Rotator() - OtherSample.WorldTransform.GetRotation().Rotator()).GetNormalized();
+			break;
+		case EGMCE_TrajectoryRotationType::Controller:
+			Delta = (WorldTransform.GetRotation().Rotator() - OtherSample.WorldTransform.GetRotation().Rotator()).GetNormalized();
+			break;
+		case EGMCE_TrajectoryRotationType::MeshOffset:
+			Delta = (MeshComponentRelativeRotation.Rotator() - OtherSample.MeshComponentRelativeRotation.Rotator()).GetNormalized();
+			break;
+		}
+		
 		// World points don't change.
-		const FRotator Delta = (ActorWorldRotation - OtherSample.ActorWorldRotation).GetNormalized();
 		return FRotator(Delta.Pitch * TimeRatio, Delta.Yaw * TimeRatio, Delta.Roll * TimeRatio);		
 	}
 
@@ -152,11 +182,11 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 	// ReSharper disable once CppNonExplicitConversionOperator
 	operator FPoseSearchQueryTrajectorySample() const
 	{
-		FPoseSearchQueryTrajectorySample Result; 
+		FPoseSearchQueryTrajectorySample Result;
 
 		Result.AccumulatedSeconds = AccumulatedSeconds;
 		Result.Position = RelativeTransform.GetTranslation();  
-		Result.Facing = RelativeTransform.GetRotation();
+		Result.Facing = ActorWorldTransform.GetRotation();
 
 		return Result;
 	}

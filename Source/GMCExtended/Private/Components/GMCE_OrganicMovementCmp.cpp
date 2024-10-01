@@ -2,6 +2,7 @@
 
 #include "GMCExtendedLog.h"
 #include "GMCE_TrackedCurveProvider.h"
+#include "DSP/MelScale.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Support/GMCE_UtilityLibrary.h"
@@ -1042,7 +1043,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::GetMovementHistory(bool
 }
 
 FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(const FTransform& FromOrigin,
-	bool bIncludeHistory) const
+	const FRotator& ControllerRotation, const FQuat& MeshOffset, bool bIncludeHistory) const
 {
 	const float TimePerSample = 1.f / TrajectorySimSampleRate;
 	const int32 TotalSimulatedSamples = FMath::TruncToInt32(TrajectorySimSampleRate * TrajectorySimSeconds);
@@ -1061,9 +1062,17 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 
 	FRotator RotationVelocity;
 	FVector PredictedAcceleration;
-	GetCurrentAccelerationRotationVelocityFromHistory(PredictedAcceleration, RotationVelocity);
+	GetCurrentAccelerationRotationVelocityFromHistory(PredictedAcceleration, RotationVelocity, bTrajectoryUsesControllerRotation ? EGMCE_TrajectoryRotationType::Controller : EGMCE_TrajectoryRotationType::Component);
 	FRotator RotationVelocityPerSample = RotationVelocity * TimePerSample;
 
+	FRotator ControllerRotationVelocity;
+	GetCurrentAccelerationRotationVelocityFromHistory(PredictedAcceleration, ControllerRotationVelocity, EGMCE_TrajectoryRotationType::Controller);
+	FRotator ControllerRotationVelocityPerSample = ControllerRotationVelocity * TimePerSample;
+
+	FRotator MeshOffsetRotationVelocity;
+	GetCurrentAccelerationRotationVelocityFromHistory(PredictedAcceleration, MeshOffsetRotationVelocity, EGMCE_TrajectoryRotationType::MeshOffset);
+	FRotator MeshOffsetRotationVelocityPerSample = MeshOffsetRotationVelocity * TimePerSample;
+	
 	const float BrakingDeceleration = GetBrakingDeceleration();
 	const float BrakingFriction = GroundFriction;
 	const float MaxSpeed = GetMaxSpeed();
@@ -1073,6 +1082,8 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	
 	FVector CurrentLocation = FromOrigin.GetLocation();
 	FRotator CurrentRotation = FromOrigin.GetRotation().Rotator();
+	FRotator CurrentControllerRotation = ControllerRotation;
+	FRotator CurrentMeshOffsetRotation = MeshOffset.Rotator();
 	FVector CurrentVelocity = GetLinearVelocity_GMC();
 
 	for (int32 Idx = 0; Idx < TotalSimulatedSamples; Idx++)
@@ -1081,6 +1092,8 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 		{
 			PredictedAcceleration = RotationVelocityPerSample.RotateVector(PredictedAcceleration);
 			CurrentRotation += RotationVelocityPerSample;
+			CurrentControllerRotation += ControllerRotationVelocityPerSample;
+			CurrentMeshOffsetRotation += MeshOffsetRotationVelocityPerSample;
 			RotationVelocityPerSample.Yaw /= 1.1f;
 		}
 
@@ -1131,16 +1144,25 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 		}
 
 		CurrentLocation += CurrentVelocity * TimePerSample;
-		
+
 		const FTransform NewTransform = FTransform(CurrentRotation.Quaternion(), CurrentLocation);
 		const FTransform NewRelativeTransform = NewTransform.GetRelativeTransform(FromOrigin);
 
+		FVector Facing = NewTransform.GetRotation().GetForwardVector();
+		Facing = CurrentMeshOffsetRotation.Quaternion().UnrotateVector(Facing);
+
+		const FTransform ActorTransform = FTransform(Facing.ToOrientationRotator(), CurrentLocation);
+		
 		SimulatedSample = FGMCE_MovementSample();
 		SimulatedSample.RelativeTransform = NewRelativeTransform;
 		SimulatedSample.RelativeLinearVelocity = FromOrigin.InverseTransformVectorNoScale(CurrentVelocity);
 		SimulatedSample.WorldTransform = NewTransform;
 		SimulatedSample.WorldLinearVelocity = CurrentVelocity;
 		SimulatedSample.AccumulatedSeconds = TimePerSample * (Idx + 1);
+		SimulatedSample.ControllerRotation = CurrentControllerRotation;
+		SimulatedSample.MeshComponentRelativeRotation = CurrentMeshOffsetRotation.Quaternion();
+		SimulatedSample.ActorWorldTransform = ActorTransform;
+		SimulatedSample.ActorWorldRotation = ActorTransform.GetRotation().Rotator();
 
 		Predictions.Samples.Emplace(SimulatedSample);
 	}
@@ -1151,15 +1173,18 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 void UGMCE_OrganicMovementCmp::UpdateTrajectoryPrediction()
 {
 	FTransform OriginTransform;
+	FQuat MeshOffsetRotation;
 	if (bTrajectoryUsesMesh && IsValid(SkeletalMesh))
 	{
 		OriginTransform = SkeletalMesh->GetComponentTransform();
+		MeshOffsetRotation = SkeletalMesh->GetRelativeRotation().Quaternion();
 	}
 	else
 	{
 		OriginTransform = UpdatedComponent->GetComponentTransform();
+		MeshOffsetRotation = FQuat::Identity;
 	}
-	PredictedTrajectory = PredictMovementFuture(OriginTransform, true);	
+	PredictedTrajectory = PredictMovementFuture(OriginTransform, GetControllerRotation_GMC(), MeshOffsetRotation, true);	
 }
 
 FGMCE_MovementSample UGMCE_OrganicMovementCmp::GetMovementSampleFromCurrentState() const
@@ -1169,9 +1194,11 @@ FGMCE_MovementSample UGMCE_OrganicMovementCmp::GetMovementSampleFromCurrentState
 	// CurrentTransform.SetLocation(CurrentLocation);
 
 	FTransform CurrentTransform;
+	FQuat MeshRelativeRotation = FQuat::Identity;
 	if (bTrajectoryUsesMesh && IsValid(SkeletalMesh))
 	{
 		CurrentTransform = SkeletalMesh->GetComponentTransform();
+		MeshRelativeRotation = SkeletalMesh->GetRelativeRotation().Quaternion();
 	}
 	else
 	{
@@ -1187,6 +1214,8 @@ FGMCE_MovementSample UGMCE_OrganicMovementCmp::GetMovementSampleFromCurrentState
 
 	FGMCE_MovementSample Result = FGMCE_MovementSample(CurrentTransform, GetLinearVelocity_GMC());
 	Result.ActorWorldRotation = GetPawnOwner()->GetActorRotation();
+	Result.MeshComponentRelativeRotation = MeshRelativeRotation;
+	Result.ControllerRotation = FRotator(0.f, GetControllerRotation_GMC().Yaw, 0.f);
 	if (!LastMovementSample.IsZeroSample())
 	{
 		Result.ActorDeltaRotation = Result.ActorWorldRotation - LastMovementSample.ActorWorldRotation;
@@ -1272,7 +1301,7 @@ void UGMCE_OrganicMovementCmp::UpdateMovementSamples_Implementation()
 }
 
 void UGMCE_OrganicMovementCmp::GetCurrentAccelerationRotationVelocityFromHistory(FVector& OutAcceleration,
-	FRotator& OutRotationVelocity) const
+	FRotator& OutRotationVelocity, const EGMCE_TrajectoryRotationType& RotationType) const
 {
 	const auto HistoryArray = MovementSamples;
 	if (HistoryArray.IsEmpty())
@@ -1288,7 +1317,7 @@ void UGMCE_OrganicMovementCmp::GetCurrentAccelerationRotationVelocityFromHistory
 
 		if (LastMovementSample.AccumulatedSeconds - Sample.AccumulatedSeconds >= 0.01f)
 		{
-			OutRotationVelocity = LastMovementSample.GetRotationVelocityFrom(Sample);
+			OutRotationVelocity = LastMovementSample.GetRotationVelocityFrom(Sample, RotationType);
 			OutAcceleration = LastMovementSample.GetAccelerationFrom(Sample);
 			return;
 		}

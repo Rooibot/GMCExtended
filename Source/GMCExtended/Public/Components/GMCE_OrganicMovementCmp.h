@@ -401,7 +401,7 @@ public:
 	/// Given the historical samples, predict the future trajectory a character will take. Coordinates are relative
 	/// to the origin point provided.
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
-	FGMCE_MovementSampleCollection PredictMovementFuture(const FTransform& FromOrigin, bool bIncludeHistory) const;
+	FGMCE_MovementSampleCollection PredictMovementFuture(const FTransform& FromOrigin, const FRotator& ControllerRotation, const FQuat& MeshOffset, bool bIncludeHistory) const;
 
 	/// Update the cached trajectory prediction. Called automatically if trajectory precalculation is enabled.
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
@@ -466,7 +466,7 @@ protected:
 	void UpdateMovementSamples();
 
 	/// Get our current acceleration and rotational velocity from our historical movement samples.
-	void GetCurrentAccelerationRotationVelocityFromHistory(FVector& OutAcceleration, FRotator& OutRotationVelocity) const;
+	void GetCurrentAccelerationRotationVelocityFromHistory(FVector& OutAcceleration, FRotator& OutRotationVelocity, const EGMCE_TrajectoryRotationType& RotationType) const;
 
 	
 private:
