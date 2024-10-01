@@ -150,6 +150,7 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 		{
 			UpdateStopPrediction(DeltaTime);
 			UpdatePivotPrediction(DeltaTime);
+			UpdateStartPrediction(DeltaTime);
 		}
 
 		if (bTrajectoryEnabled)
@@ -953,6 +954,22 @@ void UGMCE_OrganicMovementCmp::UpdatePivotPrediction(float DeltaTime)
 	bTrajectoryIsPivoting = !PredictedPivotPoint.IsZero() && IsInputPresent() && DoInputAndVelocityDiffer();	
 }
 
+void UGMCE_OrganicMovementCmp::UpdateStartPrediction(float DeltaTime)
+{
+	if (GetCurrentAnimationAcceleration().IsZero() && LastStartVelocityCheck.IsZero() && !bTrajectoryIsPivoting && !bLastStoppedPivotCheck)
+	{
+		bTrajectoryIsStarting = false;
+		bLastStoppedPivotCheck = false;
+		LastStoppedTimestamp = GetTime();
+		return;
+	}
+
+	bTrajectoryIsStarting = (GetTime() - LastStoppedTimestamp < 0.2) && !bTrajectoryIsPivoting && !bLastStoppedPivotCheck;
+	bLastStoppedPivotCheck = bTrajectoryIsPivoting;
+	LastStartVelocityCheck = GetLinearVelocity_GMC();
+
+}
+
 bool UGMCE_OrganicMovementCmp::IsStopPredicted(FVector& OutStopPrediction) const
 {
 	OutStopPrediction = PredictedStopPoint;
@@ -1061,7 +1078,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	Predictions.Samples.Add(GetMovementSampleFromCurrentState());
 
 	FRotator RotationVelocity;
-	FVector PredictedAcceleration;
+	FVector PredictedAcceleration = IsInputPresent() ? GetCurrentEffectiveAcceleration() : FVector::ZeroVector;
 	GetCurrentAccelerationRotationVelocityFromHistory(PredictedAcceleration, RotationVelocity, bTrajectoryUsesControllerRotation ? EGMCE_TrajectoryRotationType::Controller : EGMCE_TrajectoryRotationType::Component);
 	FRotator RotationVelocityPerSample = RotationVelocity * TimePerSample;
 
@@ -1148,10 +1165,9 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 		const FTransform NewTransform = FTransform(CurrentRotation.Quaternion(), CurrentLocation);
 		const FTransform NewRelativeTransform = NewTransform.GetRelativeTransform(FromOrigin);
 
-		FVector Facing = NewTransform.GetRotation().GetForwardVector();
-		Facing = CurrentMeshOffsetRotation.Quaternion().UnrotateVector(Facing);
+		const FRotator FacingRotation = NewTransform.GetRotation().Rotator() - MeshOffset.Rotator();
 
-		const FTransform ActorTransform = FTransform(Facing.ToOrientationRotator(), CurrentLocation);
+		const FTransform ActorTransform = FTransform(FacingRotation, CurrentLocation);
 		
 		SimulatedSample = FGMCE_MovementSample();
 		SimulatedSample.RelativeTransform = NewRelativeTransform;
@@ -1213,6 +1229,7 @@ FGMCE_MovementSample UGMCE_OrganicMovementCmp::GetMovementSampleFromCurrentState
 	}
 
 	FGMCE_MovementSample Result = FGMCE_MovementSample(CurrentTransform, GetLinearVelocity_GMC());
+	Result.ActorWorldTransform = GetPawnOwner()->GetActorTransform();
 	Result.ActorWorldRotation = GetPawnOwner()->GetActorRotation();
 	Result.MeshComponentRelativeRotation = MeshRelativeRotation;
 	Result.ControllerRotation = FRotator(0.f, GetControllerRotation_GMC().Yaw, 0.f);

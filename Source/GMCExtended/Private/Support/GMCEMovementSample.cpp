@@ -13,7 +13,7 @@ void FGMCE_MovementSample::DrawDebug(const UWorld* World, const FTransform& From
 	
 	DrawDebugDirectionalArrow(World, PositionWS, WorldVelocity, ArrowSize, Color, false, -1, 0, ArrowThickness);
 	
-	const FVector WorldFacingEnd = PositionWS + (WorldTransform.GetRotation().GetForwardVector() * 10.f);
+	const FVector WorldFacingEnd = PositionWS + (ActorWorldTransform.GetRotation().GetForwardVector() * 10.f);
 	DrawDebugLine(World, PositionWS, WorldFacingEnd, FColor::White, false, -1, 0, 1.f);
 }
 

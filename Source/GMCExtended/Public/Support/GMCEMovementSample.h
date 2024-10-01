@@ -185,8 +185,8 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 		FPoseSearchQueryTrajectorySample Result;
 
 		Result.AccumulatedSeconds = AccumulatedSeconds;
-		Result.Position = RelativeTransform.GetTranslation();  
-		Result.Facing = ActorWorldTransform.GetRotation();
+		Result.Position = WorldTransform.GetTranslation();  
+		Result.Facing = WorldTransform.GetRotation();
 
 		return Result;
 	}

@@ -320,6 +320,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
 	void UpdatePivotPrediction(float DeltaTime);
 
+	/// Calls the starting prediction logic; the result will be cached in the TrajectoryIsStarting
+	/// property.
+	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
+	void UpdateStartPrediction(float DeltaTime);
+	
 	/// Check whether a stop is predicted, and store the prediction in OutStopPrediction. Only valid
 	/// if UpdateStopPrediction has been called, or PrecalculateDistanceMatches is true.
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
@@ -330,6 +335,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
 	bool IsPivotPredicted(FVector &OutPivotPrediction) const;
 
+	/// Check whether we're starting to move or not.
+	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
+	bool IsStarting() const { return bTrajectoryIsStarting; };
+	
 	/// If true, this component will pre-calculate stop and pivot predictions, so that they can be easily accessed
 	/// in a thread-safe manner without needing to manually call the calculations each time.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory|Precalculations")
@@ -375,6 +384,15 @@ private:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Movement Trajectory", meta=(AllowPrivateAccess=true))
 	FVector PredictedPivotPoint { 0.f };
 
+	/// A position relative to our location where we predict a pivot. Only valid when UpdatePivotPrediction has
+	/// been called, or PrecalculateDistanceMatches is true.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Movement Trajectory", meta=(AllowPrivateAccess=true))
+	bool bTrajectoryIsStarting { false };
+
+	double LastStoppedTimestamp { 0 };
+	bool bLastStoppedPivotCheck { false };
+	FVector LastStartVelocityCheck { 0.f };
+	
 	/// Should we start with trajectory debug enabled? Only valid in editor.
 	UPROPERTY(EditDefaultsOnly, Category="Movement Trajectory", meta=(AllowPrivateAccess=true))
 	bool bDrawDebugPredictions { false };
