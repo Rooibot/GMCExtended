@@ -230,6 +230,9 @@ public:
 	FOnSyncDataApplied OnSyncDataAppliedDelegate;
 	FOnBindReplicationData OnBindReplicationData;
 
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	FVector LastLandingVelocity { 0.f };
+
 protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	FRotator CurrentAimRotation { FRotator::ZeroRotator };
@@ -263,10 +266,9 @@ protected:
 
 	FVector LastAnimationVelocity { 0.f };
 
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
-	FVector LastLandingVelocity { 0.f };
 	int32 BI_LastLandingVelocity { -1 };
 	
+
 #pragma endregion
 	
 	// Trajectory state functionality (input presence, acceleration synthesis for simulated proxies, etc.)
