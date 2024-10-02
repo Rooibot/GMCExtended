@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GMCExtendedLog.h"
 #include "Animation/MotionTrajectoryTypes.h"
 #include "PoseSearch/PoseSearchTrajectoryTypes.h"
 #include "GMCEMovementSample.generated.h"
@@ -8,6 +9,7 @@
 UENUM()
 enum class EGMCE_TrajectoryRotationType : uint8
 {
+	Actor,
 	Component,
 	Controller,
 	MeshOffset
@@ -65,7 +67,7 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 		WorldLinearVelocity = LinearVelocity;
 
 		RelativeTransform = WorldTransform * WorldTransform.Inverse();
-		RelativeLinearVelocity = WorldTransform.Inverse().TransformVectorNoScale(WorldLinearVelocity);		
+		RelativeLinearVelocity = WorldTransform.Inverse().TransformVectorNoScale(WorldLinearVelocity);
 	}
 
 	FGMCE_MovementSample() {};
@@ -79,16 +81,21 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 		FRotator Delta;
 		switch (RotationType)
 		{
+		case EGMCE_TrajectoryRotationType::Actor:
+			Delta = (ActorWorldRotation - OtherSample.ActorWorldRotation).GetNormalized();
+			break;
 		case EGMCE_TrajectoryRotationType::Component:
 			Delta = (WorldTransform.GetRotation().Rotator() - OtherSample.WorldTransform.GetRotation().Rotator()).GetNormalized();
 			break;
 		case EGMCE_TrajectoryRotationType::Controller:
-			Delta = (WorldTransform.GetRotation().Rotator() - OtherSample.WorldTransform.GetRotation().Rotator()).GetNormalized();
+			Delta = (ControllerRotation - OtherSample.ControllerRotation).GetNormalized();
 			break;
 		case EGMCE_TrajectoryRotationType::MeshOffset:
 			Delta = (MeshComponentRelativeRotation.Rotator() - OtherSample.MeshComponentRelativeRotation.Rotator()).GetNormalized();
 			break;
 		}
+
+		if (Delta.IsNearlyZero()) return FRotator::ZeroRotator;
 		
 		// World points don't change.
 		return FRotator(Delta.Pitch * TimeRatio, Delta.Yaw * TimeRatio, Delta.Roll * TimeRatio);		
@@ -100,7 +107,7 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 
 		const float TimeRatio = 1.f / ( AccumulatedSeconds - OtherSample.AccumulatedSeconds );
 
-		const FVector Travel = WorldTransform.GetLocation() - OtherSample.WorldTransform.GetLocation();
+		const FVector Travel = WorldLinearVelocity - OtherSample.WorldLinearVelocity;
 		return Travel / TimeRatio;		
 	}
 
@@ -155,8 +162,8 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 
 	FString ToString() const
 	{
-		return FString::Printf(TEXT("[%f] %s facing %s, accel %s"), AccumulatedSeconds,
-			*WorldLinearVelocity.ToCompactString(), *WorldTransform.GetRotation().Rotator().ToCompactString(), *Acceleration.ToCompactString());
+		return FString::Printf(TEXT("[%f] %s facing %s, accel %s, controller %s"), AccumulatedSeconds,
+			*WorldLinearVelocity.ToCompactString(), *WorldTransform.GetRotation().Rotator().ToCompactString(), *Acceleration.ToCompactString(), *ControllerRotation.ToCompactString());
 	}
 
 	void Reset()
@@ -182,6 +189,7 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 		WorldLinearVelocity = Other.WorldLinearVelocity;
 		ActorWorldRotation = Other.ActorWorldRotation;
 		ActorDeltaRotation = Other.ActorDeltaRotation;
+		ControllerRotation = Other.ControllerRotation;
 	}
 
 	bool Equals(const FGMCE_MovementSample& Other, const bool bIgnoreTime = false) const
@@ -190,7 +198,8 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 				WorldTransform.Equals(Other.WorldTransform) &&
 				WorldLinearVelocity == Other.WorldLinearVelocity &&
 				RelativeTransform.Equals(Other.RelativeTransform) &&
-				RelativeLinearVelocity == Other.RelativeLinearVelocity;
+				RelativeLinearVelocity == Other.RelativeLinearVelocity &&
+				ControllerRotation.Equals(Other.ControllerRotation);
 	}
 
 	bool operator ==(const FGMCE_MovementSample& Other) const

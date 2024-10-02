@@ -146,22 +146,6 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 
 	if (GetMovementMode() == EGMC_MovementMode::Grounded)
 	{
-		if (bPrecalculateDistanceMatches)
-		{
-			UpdateStopPrediction(DeltaTime);
-			UpdatePivotPrediction(DeltaTime);
-			UpdateStartPrediction(DeltaTime);
-		}
-
-		if (bTrajectoryEnabled)
-		{
-			UpdateMovementSamples();
-			if (bPrecalculateFutureTrajectory)
-			{
-				UpdateTrajectoryPrediction();
-			}
-		}
-
 		if (GetNetMode() != NM_Standalone && GetNetMode() != NM_DedicatedServer && TurnInPlaceType != EGMCE_TurnInPlaceType::None)
 		{
 			if (!FMath::IsNearlyZero(RootYawOffset, KINDA_SMALL_NUMBER) && !IsTurningInPlace())
@@ -175,6 +159,7 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 				RootYawOffset = FMath::Lerp(RootYawOffset, 0.f, FMath::Clamp(RootYawBlendTime * 5.f, 0.f, 1.f));
 			}
 
+			SV_SwapServerState();
 			if (!FMath::IsNearlyZero(RootYawOffset, KINDA_SMALL_NUMBER))
 			{
 				GetSkeletalMeshReference()->SetRelativeRotation(FRotator(0.f, RootYawOffset - 90.f, 0.f));
@@ -184,6 +169,7 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 				GetSkeletalMeshReference()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f), false, nullptr, ETeleportType::ResetPhysics);
 				RootYawBlendTime = 0.f;
 			}			
+			SV_SwapServerState();
 		}
 
 	}
@@ -201,7 +187,7 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
     }
 
 #if ENABLE_DRAW_DEBUG || WITH_EDITORONLY_DATA
-	if (IsTrajectoryDebugEnabled() && !IsNetMode(NM_DedicatedServer) && GetMovementMode() == EGMC_MovementMode::Grounded)
+	if (IsTrajectoryDebugEnabled() && !IsNetMode(NM_DedicatedServer) && (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne))
 	{
 		const FVector ActorLocation = GetActorLocation_GMC();
 		if (bTrajectoryIsStopping || (bDebugHadPreviousStop && GetLinearVelocity_GMC().IsZero()))
@@ -451,7 +437,7 @@ void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
 	UpdateCalculatedEffectiveAcceleration();
 
 	UpdateTurnInPlaceState(true);
-	
+
 	if (bWantsTurnInPlace && (IsTurningInPlace() || TurnInPlaceState == EGMCE_TurnInPlaceState::Starting))
 	{
 		ApplyTurnInPlace(DeltaTime, true);
@@ -461,7 +447,28 @@ void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
 	{
 		EndTurnInPlace(true);
 	}
-	
+
+	if (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne)
+	{
+		if (GetMovementMode() == EGMC_MovementMode::Grounded)
+		{
+			if (bPrecalculateDistanceMatches)
+			{
+				UpdateStopPrediction(DeltaTime);
+				UpdatePivotPrediction(DeltaTime);
+				UpdateStartPrediction(DeltaTime);
+			}
+		}
+
+		if (bTrajectoryEnabled)
+		{
+			UpdateMovementSamples();
+			if (bPrecalculateFutureTrajectory)
+			{
+				UpdateTrajectoryPrediction();
+			}
+		}
+	}
 }
 
 void UGMCE_OrganicMovementCmp::GenPredictionTick_Implementation(float DeltaTime)
@@ -474,6 +481,29 @@ void UGMCE_OrganicMovementCmp::GenAncillaryTick_Implementation(float DeltaTime, 
                                                                bool bCombinedClientMove)
 {
 	Super::GenAncillaryTick_Implementation(DeltaTime, bLocalMove, bCombinedClientMove);
+
+	if (!IsSmoothedListenServerPawn() && (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne))
+	{
+		if (GetMovementMode() == EGMC_MovementMode::Grounded)
+		{
+			if (bPrecalculateDistanceMatches)
+			{
+				UpdateStopPrediction(DeltaTime);
+				UpdatePivotPrediction(DeltaTime);
+				UpdateStartPrediction(DeltaTime);
+			}
+		}
+
+		if (bTrajectoryEnabled)
+		{
+			UpdateMovementSamples();
+			if (bPrecalculateFutureTrajectory)
+			{
+				UpdateTrajectoryPrediction();
+			}
+		}
+		
+	}
 }
 
 bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_FloorParams& Floor, float DeltaSeconds)
@@ -1081,18 +1111,19 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	FRotator RotationVelocity;
 	FVector TempVector;
 	
-	GetCurrentAccelerationRotationVelocityFromHistory(PredictedAcceleration, RotationVelocity, bTrajectoryUsesControllerRotation ? EGMCE_TrajectoryRotationType::Controller : EGMCE_TrajectoryRotationType::Component);
+	GetCurrentAccelerationRotationVelocityFromHistory(PredictedAcceleration, RotationVelocity, EGMCE_TrajectoryRotationType::Component);
+	RotationVelocity = FRotator(0.f, FMath::Clamp(RotationVelocity.Yaw, -RotationRate, RotationRate), 0.f);
 	FRotator RotationVelocityPerSample = RotationVelocity * TimePerSample;
 
 	FRotator ControllerRotationVelocity;
 	GetCurrentAccelerationRotationVelocityFromHistory(TempVector, ControllerRotationVelocity, EGMCE_TrajectoryRotationType::Controller);
-	FRotator ControllerRotationVelocityPerSample = ControllerRotationVelocity * TimePerSample;
+	FRotator ControllerRotationVelocityPerSample = FRotator(0.f, ControllerRotationVelocity.Yaw, 0.f) * TimePerSample;
 
 	FRotator MeshOffsetRotationVelocity;
 	GetCurrentAccelerationRotationVelocityFromHistory(TempVector, MeshOffsetRotationVelocity, EGMCE_TrajectoryRotationType::MeshOffset);
-	FRotator MeshOffsetRotationVelocityPerSample = MeshOffsetRotationVelocity * TimePerSample;
+	FRotator MeshOffsetRotationVelocityPerSample = FRotator(0.f, MeshOffsetRotationVelocity.Yaw, 0.f) * TimePerSample;
 
-	if (IsInputPresent())
+	if (IsInputPresent() && IsMovingOnGround())
 	{
 		PredictedAcceleration = TransformInputVectorAbsoluteZ(GetRawInputVector()) * GetInputAcceleration();
 	}
@@ -1100,11 +1131,20 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	{
 		PredictedAcceleration = FVector::ZeroVector;
 	}
-
+		
 	PredictedAcceleration = PredictedAcceleration.GetClampedToMaxSize(GetInputAcceleration());
 
+	FRotator AccelerationRotation = ControllerRotationVelocityPerSample;
+	AccelerationRotation.Pitch = 0.f;
+	AccelerationRotation.Roll = 0.f;
+
+	if (IsAirborne())
+	{
+		PredictedAcceleration.Z = GetGravityZ();
+	}
+
 	const float BrakingDeceleration = GetBrakingDeceleration();
-	const float BrakingFriction = GetGroundFriction();
+	const float BrakingFriction = IsAirborne() ? 1.f : GetGroundFriction();
 	const float MaxSpeed = GetMaxSpeed();
 
 	const bool bZeroFriction = BrakingFriction == 0.f;
@@ -1118,17 +1158,37 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 
 	for (int32 Idx = 0; Idx < TotalSimulatedSamples; Idx++)
 	{
-		if (!RotationVelocityPerSample.IsNearlyZero())
+		if (!AccelerationRotation.IsNearlyZero())
 		{
-			PredictedAcceleration = RotationVelocityPerSample.RotateVector(PredictedAcceleration);
-			CurrentRotation += RotationVelocityPerSample;
-			CurrentControllerRotation += ControllerRotationVelocityPerSample;
-			CurrentMeshOffsetRotation += MeshOffsetRotationVelocityPerSample;
-			RotationVelocityPerSample.Yaw /= 1.1f;
+			PredictedAcceleration = AccelerationRotation.RotateVector(PredictedAcceleration);
+			AccelerationRotation.Yaw /= 1.02f;
 		}
 
-		const float DecelerationScale = FMath::Clamp(1.f - (PredictedAcceleration.GetSafeNormal() | CurrentVelocity.GetSafeNormal()), 0.f, 1.f);
-		FVector Deceleration = GetBrakingDeceleration() * DecelerationScale * -CurrentVelocity.GetSafeNormal() * GetGroundFriction();
+		if (!RotationVelocityPerSample.IsNearlyZero())
+		{
+			CurrentRotation += RotationVelocityPerSample;
+			RotationVelocityPerSample.Yaw /= 1.1f;
+		}
+		if (!ControllerRotationVelocityPerSample.IsNearlyZero())
+		{
+			CurrentControllerRotation += ControllerRotationVelocityPerSample;
+			ControllerRotationVelocityPerSample.Yaw /= 1.1f;
+		}
+		if (!CurrentMeshOffsetRotation.IsNearlyZero())
+		{
+			CurrentMeshOffsetRotation += MeshOffsetRotationVelocityPerSample;
+			MeshOffsetRotationVelocityPerSample.Yaw /= 1.1f;
+		}
+		
+		FVector TestVelocity = CurrentVelocity;
+		if (IsAirborne() && TestVelocity.Z <= 0.f)
+		{
+			TestVelocity.Z = 0.f;
+		}
+		
+		const float DecelerationScale = FMath::Clamp(1.f - (PredictedAcceleration.GetSafeNormal() | TestVelocity.GetSafeNormal()), 0.f, 1.f);
+		FVector Deceleration = GetBrakingDeceleration() * DecelerationScale * -TestVelocity.GetSafeNormal() * BrakingFriction;
+
 		if (!Deceleration.IsZero())
 		{
 			Deceleration = ClampToMinDeceleration(Deceleration);
@@ -1222,7 +1282,7 @@ void UGMCE_OrganicMovementCmp::UpdateTrajectoryPrediction()
 		OriginTransform = UpdatedComponent->GetComponentTransform();
 		MeshOffsetRotation = FQuat::Identity;
 	}
-	PredictedTrajectory = PredictMovementFuture(OriginTransform, GetControllerRotation_GMC(), MeshOffsetRotation, true);	
+	PredictedTrajectory = PredictMovementFuture(OriginTransform, FRotator(0.f, GetControllerRotation_GMC().Yaw, 0.f), MeshOffsetRotation, true);	
 }
 
 FGMCE_MovementSample UGMCE_OrganicMovementCmp::GetMovementSampleFromCurrentState() const
@@ -1357,13 +1417,16 @@ void UGMCE_OrganicMovementCmp::GetCurrentAccelerationRotationVelocityFromHistory
 	{
 		const FGMCE_MovementSample Sample = HistoryArray[Idx];
 
-		if (LastMovementSample.AccumulatedSeconds - Sample.AccumulatedSeconds >= 0.01f)
+		if (LastMovementSample.AccumulatedSeconds - Sample.AccumulatedSeconds >= 0.1f)
 		{
 			OutRotationVelocity = LastMovementSample.GetRotationVelocityFrom(Sample, RotationType);
 			OutAcceleration = LastMovementSample.GetAccelerationFrom(Sample);
 			return;
 		}
-	}		
+	}
+
+	OutRotationVelocity = FRotator::ZeroRotator;
+	OutAcceleration = FVector::ZeroVector;
 }
 
 void UGMCE_OrganicMovementCmp::EnableRagdoll()
