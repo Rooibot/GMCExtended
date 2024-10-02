@@ -5,7 +5,7 @@
 void FGMCE_MovementSample::DrawDebug(const UWorld* World, const FTransform& FromOrigin, const FColor& Color, float LifeTime) const
 {
 	const FTransform TransformWS = RelativeTransform * FromOrigin;
-	const FVector PositionWS = TransformWS.GetTranslation();
+	const FVector PositionWS = TransformWS.GetTranslation() + FVector(0.f, 0.f, 2.f);
 	const FVector WorldVelocity = FromOrigin.TransformVector(RelativeLinearVelocity) * 0.025f + PositionWS;
 
 	const float ArrowSize = UKismetMathLibrary::MapRangeClamped(RelativeLinearVelocity.Length(), 0, 800, 5, 30);

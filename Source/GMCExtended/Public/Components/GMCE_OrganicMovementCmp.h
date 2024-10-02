@@ -466,6 +466,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Movement Trajectory")
 	float TrajectorySimSeconds = { 1.f };
 
+	/// Whether predicted trajectory should adhere to the ground.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Movement Trajectory")
+	bool bTrajectoryPredictCollisions { false };
+	
 	/// The last predicted trajectory. Only valid if PrecalculateFutureTrajectory is true, or
 	/// UpdateTrajectoryPrediction has been manually called.
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Movement Trajectory")

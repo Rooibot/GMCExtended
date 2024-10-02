@@ -1123,7 +1123,9 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	GetCurrentAccelerationRotationVelocityFromHistory(TempVector, MeshOffsetRotationVelocity, EGMCE_TrajectoryRotationType::MeshOffset);
 	FRotator MeshOffsetRotationVelocityPerSample = FRotator(0.f, MeshOffsetRotationVelocity.Yaw, 0.f) * TimePerSample;
 
-	if (IsInputPresent() && IsMovingOnGround())
+	EGMC_MovementMode EffectiveMovementMode = GetMovementMode();
+	
+	if (IsInputPresent() && EffectiveMovementMode == EGMC_MovementMode::Grounded)
 	{
 		PredictedAcceleration = TransformInputVectorAbsoluteZ(GetRawInputVector()) * GetInputAcceleration();
 	}
@@ -1138,13 +1140,13 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	AccelerationRotation.Pitch = 0.f;
 	AccelerationRotation.Roll = 0.f;
 
-	if (IsAirborne())
+	if (EffectiveMovementMode == EGMC_MovementMode::Airborne)
 	{
 		PredictedAcceleration.Z = GetGravityZ();
 	}
 
-	const float BrakingDeceleration = GetBrakingDeceleration();
-	const float BrakingFriction = IsAirborne() ? 1.f : GetGroundFriction();
+	float BrakingDeceleration = GetBrakingDeceleration();
+	float BrakingFriction = IsAirborne() ? 1.f : GetGroundFriction();
 	const float MaxSpeed = GetMaxSpeed();
 
 	const bool bZeroFriction = BrakingFriction == 0.f;
@@ -1181,7 +1183,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 		}
 		
 		FVector TestVelocity = CurrentVelocity;
-		if (IsAirborne() && TestVelocity.Z <= 0.f)
+		if (EffectiveMovementMode == EGMC_MovementMode::Airborne && TestVelocity.Z <= 0.f)
 		{
 			TestVelocity.Z = 0.f;
 		}
@@ -1241,7 +1243,45 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 			CurrentVelocity = CurrentVelocity.GetClampedToMaxSize(MaxSpeed);
 		}
 
+		const FVector PreviousLocation = CurrentLocation;
 		CurrentLocation += CurrentVelocity * TimePerSample;
+
+		if (bTrajectoryPredictCollisions)
+		{
+			FVector Start = CurrentLocation + FVector::UpVector * GetMaxStepUpHeight();
+			FVector End = CurrentLocation - FVector::UpVector * GetMaxStepDownHeight();
+
+			FHitResult Hit;
+			GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECollisionChannel::ECC_Visibility);
+			
+			if (Hit.bBlockingHit && (FMath::Abs(Hit.Location.Z - CurrentLocation.Z) > 0.5f))
+			{
+				CurrentLocation = Hit.Location;
+				CurrentVelocity.Z = (CurrentLocation.Z - PreviousLocation.Z) / TimePerSample;
+			}
+
+			if (Hit.bBlockingHit != (EffectiveMovementMode == EGMC_MovementMode::Grounded))
+			{
+				// We either were airborne and hit the ground, or vice versa.
+				if (EffectiveMovementMode == EGMC_MovementMode::Grounded)
+				{
+					// Handle transition to falling.
+					EffectiveMovementMode = EGMC_MovementMode::Airborne;
+					PredictedAcceleration.Z = GetGravity().Z;
+					BrakingDeceleration = BrakingDecelerationAirborne;
+					BrakingFriction = 1.f;
+				}
+				else
+				{
+					// Handle transition to ground
+					EffectiveMovementMode = EGMC_MovementMode::Grounded;
+					PredictedAcceleration.Z = 0.f;
+					CurrentVelocity.Z = 0.f;
+					BrakingDeceleration = BrakingDecelerationGrounded;
+					BrakingFriction = GetGroundFriction();
+				}
+			}
+		}
 
 		const FTransform NewTransform = FTransform(CurrentRotation.Quaternion(), CurrentLocation);
 		const FTransform NewRelativeTransform = NewTransform.GetRelativeTransform(FromOrigin);
