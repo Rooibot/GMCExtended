@@ -12,9 +12,16 @@ void FGMCE_MovementSample::DrawDebug(const UWorld* World, const FTransform& From
 	const float ArrowThickness = UKismetMathLibrary::MapRangeClamped(RelativeLinearVelocity.Length(), 0, 800, 1, 3);
 	
 	DrawDebugDirectionalArrow(World, PositionWS, WorldVelocity, ArrowSize, Color, false, (AccumulatedSeconds > 0.f) ? LifeTime : -1, 0, ArrowThickness);
-	
-	const FVector WorldFacingEnd = PositionWS + (ActorWorldTransform.GetRotation().GetForwardVector() * 10.f);
-	DrawDebugLine(World, PositionWS, WorldFacingEnd, FColor::White, false, (AccumulatedSeconds > 0.f) ? LifeTime : -1, 0, 1.f);
+
+	const FVector WorldFacingStart = PositionWS + (FVector::UpVector * 5.f);
+	const FVector WorldFacingEnd = WorldFacingStart + (ActorWorldTransform.GetRotation().GetForwardVector() * 10.f);
+	DrawDebugLine(World, WorldFacingStart, WorldFacingEnd, FColor::White, false, (AccumulatedSeconds > 0.f) ? LifeTime : -1, 0, 1.f);
+
+	if (bUseAsMarker)
+	{
+		DrawDebugBox(World, PositionWS, FVector(5.f), FColor::White, false, (AccumulatedSeconds > 0.f) ? LifeTime : -1, 0, 1.f);
+		DrawDebugLine(World, PositionWS + FVector::UpVector * 40, PositionWS - FVector::UpVector * 40, FColor::White, false, (AccumulatedSeconds > 0.f) ? LifeTime : -1, 0.f);
+	}
 }
 
 void FGMCE_MovementSampleCollection::DrawDebug(const UWorld* World, const FTransform& FromOrigin, const FColor& PastColor,

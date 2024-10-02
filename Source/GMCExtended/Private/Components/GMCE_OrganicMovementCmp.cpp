@@ -59,6 +59,31 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	// Trajectory updates. We're putting this back on the component tick so it works smoothly for simulated
+	// pawns as well.
+	if (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne)
+	{
+		if (GetMovementMode() == EGMC_MovementMode::Grounded)
+		{
+			if (bPrecalculateDistanceMatches)
+			{
+				UpdateStopPrediction(DeltaTime);
+				UpdatePivotPrediction(DeltaTime);
+				UpdateStartPrediction(DeltaTime);
+			}
+		}
+
+		if (bTrajectoryEnabled)
+		{
+			UpdateMovementSamples();
+			if (bPrecalculateFutureTrajectory)
+			{
+				UpdateTrajectoryPrediction();
+			}
+		}
+	}
+	
+	// Ragdoll nonsense.
 	if (bResetMesh && IsValid(SkeletalMesh))
 	{
 		UPrimitiveComponent* CollisionComponent = Cast<UPrimitiveComponent>(UpdatedComponent);
@@ -144,6 +169,7 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 	}
 	bHadInput = IsInputPresent();
 
+	// Offset turn-in-place functionality.
 	if (GetMovementMode() == EGMC_MovementMode::Grounded)
 	{
 		if (GetNetMode() != NM_Standalone && GetNetMode() != NM_DedicatedServer && TurnInPlaceType != EGMCE_TurnInPlaceType::None)
@@ -171,7 +197,6 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 			}			
 			SV_SwapServerState();
 		}
-
 	}
 	else
 	{
@@ -186,6 +211,7 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 #endif
     }
 
+	// Debug output
 #if ENABLE_DRAW_DEBUG || WITH_EDITORONLY_DATA
 	if (IsTrajectoryDebugEnabled() && !IsNetMode(NM_DedicatedServer) && (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne))
 	{
@@ -447,28 +473,6 @@ void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
 	{
 		EndTurnInPlace(true);
 	}
-
-	if (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne)
-	{
-		if (GetMovementMode() == EGMC_MovementMode::Grounded)
-		{
-			if (bPrecalculateDistanceMatches)
-			{
-				UpdateStopPrediction(DeltaTime);
-				UpdatePivotPrediction(DeltaTime);
-				UpdateStartPrediction(DeltaTime);
-			}
-		}
-
-		if (bTrajectoryEnabled)
-		{
-			UpdateMovementSamples();
-			if (bPrecalculateFutureTrajectory)
-			{
-				UpdateTrajectoryPrediction();
-			}
-		}
-	}
 }
 
 void UGMCE_OrganicMovementCmp::GenPredictionTick_Implementation(float DeltaTime)
@@ -481,29 +485,6 @@ void UGMCE_OrganicMovementCmp::GenAncillaryTick_Implementation(float DeltaTime, 
                                                                bool bCombinedClientMove)
 {
 	Super::GenAncillaryTick_Implementation(DeltaTime, bLocalMove, bCombinedClientMove);
-
-	if (!IsSmoothedListenServerPawn() && (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne))
-	{
-		if (GetMovementMode() == EGMC_MovementMode::Grounded)
-		{
-			if (bPrecalculateDistanceMatches)
-			{
-				UpdateStopPrediction(DeltaTime);
-				UpdatePivotPrediction(DeltaTime);
-				UpdateStartPrediction(DeltaTime);
-			}
-		}
-
-		if (bTrajectoryEnabled)
-		{
-			UpdateMovementSamples();
-			if (bPrecalculateFutureTrajectory)
-			{
-				UpdateTrajectoryPrediction();
-			}
-		}
-		
-	}
 }
 
 bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_FloorParams& Floor, float DeltaSeconds)
@@ -1124,7 +1105,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	FRotator MeshOffsetRotationVelocityPerSample = FRotator(0.f, MeshOffsetRotationVelocity.Yaw, 0.f) * TimePerSample;
 
 	EGMC_MovementMode EffectiveMovementMode = GetMovementMode();
-	
+
 	if (IsInputPresent() && EffectiveMovementMode == EGMC_MovementMode::Grounded)
 	{
 		PredictedAcceleration = TransformInputVectorAbsoluteZ(GetRawInputVector()) * GetInputAcceleration();
@@ -1134,20 +1115,13 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 		PredictedAcceleration = FVector::ZeroVector;
 	}
 		
-	PredictedAcceleration = PredictedAcceleration.GetClampedToMaxSize(GetInputAcceleration());
+	PredictedAcceleration.Z = 0.f;
 
 	FRotator AccelerationRotation = ControllerRotationVelocityPerSample;
-	AccelerationRotation.Pitch = 0.f;
-	AccelerationRotation.Roll = 0.f;
-
-	if (EffectiveMovementMode == EGMC_MovementMode::Airborne)
-	{
-		PredictedAcceleration.Z = GetGravityZ();
-	}
 
 	float BrakingDeceleration = GetBrakingDeceleration();
 	float BrakingFriction = IsAirborne() ? 1.f : GetGroundFriction();
-	const float MaxSpeed = GetMaxSpeed();
+	float MaxSpeed = GetMaxSpeed();
 
 	const bool bZeroFriction = BrakingFriction == 0.f;
 	const bool bNoBrakes = BrakingDeceleration == 0.f;
@@ -1160,12 +1134,6 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 
 	for (int32 Idx = 0; Idx < TotalSimulatedSamples; Idx++)
 	{
-		if (!AccelerationRotation.IsNearlyZero())
-		{
-			PredictedAcceleration = AccelerationRotation.RotateVector(PredictedAcceleration);
-			AccelerationRotation.Yaw /= 1.1f;
-		}
-
 		if (!RotationVelocityPerSample.IsNearlyZero())
 		{
 			CurrentRotation += RotationVelocityPerSample;
@@ -1181,19 +1149,36 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 			CurrentMeshOffsetRotation += MeshOffsetRotationVelocityPerSample;
 			MeshOffsetRotationVelocityPerSample.Yaw /= 1.1f;
 		}
-		
-		FVector TestVelocity = CurrentVelocity;
-		if (EffectiveMovementMode == EGMC_MovementMode::Airborne && TestVelocity.Z <= 0.f)
+
+		if (EffectiveMovementMode == EGMC_MovementMode::Airborne)
 		{
-			TestVelocity.Z = 0.f;
+			// *singing a'la Idina Menzel* I guess I'm not... defying gravity.. 
+			CurrentVelocity += GetGravity() * TimePerSample;
 		}
 		
-		const float DecelerationScale = FMath::Clamp(1.f - (PredictedAcceleration.GetSafeNormal() | TestVelocity.GetSafeNormal()), 0.f, 1.f);
-		FVector Deceleration = GetBrakingDeceleration() * DecelerationScale * -TestVelocity.GetSafeNormal() * BrakingFriction;
+		const float DecelerationScale = FMath::Clamp(1.f - (PredictedAcceleration.GetSafeNormal() | CurrentVelocity.GetSafeNormal()), 0.f, 1.f);
+		FVector Deceleration = GetBrakingDeceleration() * DecelerationScale * -CurrentVelocity.GetSafeNormal() * BrakingFriction;
 
-		if (!Deceleration.IsZero())
+		if (EffectiveMovementMode == EGMC_MovementMode::Airborne && Deceleration.Z < 0.f)
+		{
+			// Don't decelerate against gravity...
+			Deceleration.Z = 0.f;
+		}
+
+		FVector PreviousAcceleration = PredictedAcceleration;
+		if (!Deceleration.IsZero() && (EffectiveMovementMode == EGMC_MovementMode::Airborne || !IsInputPresent()))
 		{
 			Deceleration = ClampToMinDeceleration(Deceleration);
+			PredictedAcceleration += Deceleration;
+		}
+
+		if (DirectionsDifferXY(PreviousAcceleration, PredictedAcceleration))
+		{
+			PredictedAcceleration = FVector(0.f, 0.f, PredictedAcceleration.Z);
+		}
+		if (DirectionsDifferZ(PreviousAcceleration, PredictedAcceleration))
+		{
+			PredictedAcceleration = FVector(PredictedAcceleration.X, PredictedAcceleration.Y, 0.f);
 		}
 		
 		const FVector PreviousVelocity = CurrentVelocity;
@@ -1240,46 +1225,64 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 				(BrakingFriction * TimePerSample);
 
 			CurrentVelocity += PredictedAcceleration * TimePerSample;
-			CurrentVelocity = CurrentVelocity.GetClampedToMaxSize(MaxSpeed);
+
+			CurrentVelocity = CurrentVelocity.GetClampedToMaxSize2D(MaxSpeed);
 		}
 
+		if (EffectiveMovementMode == EGMC_MovementMode::Grounded && CurrentVelocity.Z < MaxGroundedVelocityZ)
+		{
+			// Stick to the ground if we're not exceeding the max grounded velocity.
+			// If we're predicting collisions anyway, we'll adapt to a slope if needed.
+			CurrentVelocity.Z = 0.f;
+		}
+		
 		const FVector PreviousLocation = CurrentLocation;
 		CurrentLocation += CurrentVelocity * TimePerSample;
+		bool bUseAsMark = false;
 
+		const float PredictedDrop = CurrentVelocity.Z * TimePerSample;
+		
 		if (bTrajectoryPredictCollisions)
 		{
 			FVector Start = CurrentLocation + FVector::UpVector * GetMaxStepUpHeight();
-			FVector End = CurrentLocation - FVector::UpVector * GetMaxStepDownHeight();
+			FVector End = CurrentLocation - FVector::UpVector * (EffectiveMovementMode == EGMC_MovementMode::Grounded ? GetMaxStepDownHeight() : PredictedDrop);
 
 			FHitResult Hit;
-			GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECollisionChannel::ECC_Visibility);
+			UKismetSystemLibrary::LineTraceSingle(this, Start, End,
+				UEngineTypes::ConvertToTraceType(ECC_Visibility), false, { },
+				EDrawDebugTrace::None, Hit, true);
 			
-			if (Hit.bBlockingHit && (FMath::Abs(Hit.Location.Z - CurrentLocation.Z) > 0.5f))
+			if (!Hit.bStartPenetrating)
 			{
-				CurrentLocation = Hit.Location;
-				CurrentVelocity.Z = (CurrentLocation.Z - PreviousLocation.Z) / TimePerSample;
-			}
+				if (Hit.bBlockingHit && (FMath::Abs(Hit.Location.Z - CurrentLocation.Z) > 2.f))
+				{
+					CurrentLocation = Hit.Location;
+					CurrentVelocity.Z = (CurrentLocation.Z - PreviousLocation.Z) / TimePerSample;
+				}
 
-			if (Hit.bBlockingHit != (EffectiveMovementMode == EGMC_MovementMode::Grounded))
-			{
-				// We either were airborne and hit the ground, or vice versa.
-				if (EffectiveMovementMode == EGMC_MovementMode::Grounded)
+				if (EffectiveMovementMode == EGMC_MovementMode::Grounded && !Hit.bBlockingHit)
 				{
 					// Handle transition to falling.
 					EffectiveMovementMode = EGMC_MovementMode::Airborne;
-					PredictedAcceleration.Z = GetGravity().Z;
 					BrakingDeceleration = BrakingDecelerationAirborne;
 					BrakingFriction = 1.f;
+					MaxSpeed = GetMaxSpeed();
+					bUseAsMark = true;
 				}
-				else
+			
+				if (EffectiveMovementMode == EGMC_MovementMode::Airborne && Hit.bBlockingHit)
 				{
 					// Handle transition to ground
 					EffectiveMovementMode = EGMC_MovementMode::Grounded;
-					PredictedAcceleration.Z = 0.f;
 					CurrentVelocity.Z = 0.f;
+					PredictedAcceleration = TransformInputVectorAbsoluteZ(GetRawInputVector()) * GetInputAcceleration();
+					PredictedAcceleration = PredictedAcceleration.GetClampedToMaxSize(GetMaxSpeed());
+					PredictedAcceleration.Z = 0.f;
 					BrakingDeceleration = BrakingDecelerationGrounded;
 					BrakingFriction = GetGroundFriction();
-				}
+					MaxSpeed = GetMaxSpeed();
+					bUseAsMark = true;
+				}				
 			}
 		}
 
@@ -1301,8 +1304,18 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 		SimulatedSample.ActorWorldTransform = ActorTransform;
 		SimulatedSample.ActorWorldRotation = ActorTransform.GetRotation().Rotator();
 		SimulatedSample.Acceleration = PredictedAcceleration;
+		SimulatedSample.bUseAsMarker = bUseAsMark;
 
 		Predictions.Samples.Emplace(SimulatedSample);
+
+		// Rotate acceleration at the end, so we can handle deceleration in a sane fashion.
+		if (!AccelerationRotation.IsNearlyZero())
+		{
+			PredictedAcceleration = AccelerationRotation.RotateVector(PredictedAcceleration);
+			AccelerationRotation.Yaw /= 1.1;
+		}
+
+		
 	}
 
 	return Predictions;	

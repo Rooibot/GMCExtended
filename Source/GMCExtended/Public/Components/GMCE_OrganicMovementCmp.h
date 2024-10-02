@@ -347,8 +347,9 @@ public:
 	bool bPrecalculateDistanceMatches { true };
 
 	/// The angle of difference which we must exceed before a pivot can be predicted. Must be
-	/// between 90 and 179. Recommended values are between 90 and 135.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory", meta=(UIMin="90", UIMax="179"))
+	/// between 30 and 179. Recommended values are between 90 and 135 for normal use, though lower
+	/// may be beneficial for motion matching.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory", meta=(UIMin="30", UIMax="179"))
 	float PivotPredictionAngleThreshold { 90.f };
 	
 	UFUNCTION(BlueprintPure, Category="Trajectory Matching", meta=(ToolTip="Returns a predicted point relative to the actor where they'll come to a stop.", BlueprintThreadSafe))
