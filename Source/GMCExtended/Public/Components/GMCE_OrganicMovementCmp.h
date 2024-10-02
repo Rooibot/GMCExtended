@@ -396,6 +396,10 @@ private:
 	/// Should we start with trajectory debug enabled? Only valid in editor.
 	UPROPERTY(EditDefaultsOnly, Category="Movement Trajectory", meta=(AllowPrivateAccess=true))
 	bool bDrawDebugPredictions { false };
+
+	/// How long should our future predictions persist on screen for? -1 is 'one frame'. Only valid in editor.
+	UPROPERTY(EditDefaultsOnly, Category="Movement Trajectory", meta=(AllowPrivateAccess=true))
+	float DebugPredictionLifeTime { -1.f };
 	
 #if ENABLE_DRAW_DEBUG || WITH_EDITORONLY_DATA
 	/// For debug rendering
@@ -450,6 +454,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Movement Trajectory")
 	float TrajectoryHistorySeconds { 2.f };
 
+	/// How long, in seconds, we should wait between samples. 0 will use a sane-but-frequent default.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Movement Trajectory")
+	float TrajectoryHistoryPeriod { 0 };
+	
 	/// How many simulated samples should be generated for each second, when predicting trajectory?
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Movement Trajectory")
 	int32 TrajectorySimSampleRate = { 30 };
