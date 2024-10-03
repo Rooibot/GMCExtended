@@ -58,6 +58,8 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
                                              FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	UpdateAllPredictions(DeltaTime);
 	
 	// Ragdoll nonsense.
 	if (bResetMesh && IsValid(SkeletalMesh))
@@ -449,11 +451,6 @@ void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
 	{
 		EndTurnInPlace(true);
 	}
-
-	if (!IsSmoothedListenServerPawn())
-	{
-		UpdateAllPredictions(DeltaTime);		
-	}
 }
 
 void UGMCE_OrganicMovementCmp::GenPredictionTick_Implementation(float DeltaTime)
@@ -466,8 +463,7 @@ void UGMCE_OrganicMovementCmp::GenAncillaryTick_Implementation(float DeltaTime, 
                                                                bool bCombinedClientMove)
 {
 	Super::GenAncillaryTick_Implementation(DeltaTime, bLocalMove, bCombinedClientMove);
-
-	UpdateAllPredictions(DeltaTime);
+	
 }
 
 bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_FloorParams& Floor, float DeltaSeconds)
