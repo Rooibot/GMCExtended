@@ -58,30 +58,6 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
                                              FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	// Trajectory updates. We're putting this back on the component tick so it works smoothly for simulated
-	// pawns as well.
-	if (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne)
-	{
-		if (GetMovementMode() == EGMC_MovementMode::Grounded)
-		{
-			if (bPrecalculateDistanceMatches)
-			{
-				UpdateStopPrediction(DeltaTime);
-				UpdatePivotPrediction(DeltaTime);
-				UpdateStartPrediction(DeltaTime);
-			}
-		}
-
-		if (bTrajectoryEnabled)
-		{
-			UpdateMovementSamples();
-			if (bPrecalculateFutureTrajectory)
-			{
-				UpdateTrajectoryPrediction();
-			}
-		}
-	}
 	
 	// Ragdoll nonsense.
 	if (bResetMesh && IsValid(SkeletalMesh))
@@ -461,7 +437,7 @@ void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
 	// If we're being simulated, we should always synthesize an acceleration from past movements.
 	UpdateAnimationHelperValues(DeltaTime);
 	UpdateCalculatedEffectiveAcceleration();
-
+	
 	UpdateTurnInPlaceState(true);
 
 	if (bWantsTurnInPlace && (IsTurningInPlace() || TurnInPlaceState == EGMCE_TurnInPlaceState::Starting))
@@ -472,6 +448,11 @@ void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
 	if (TurnInPlaceState == EGMCE_TurnInPlaceState::Running && !bWantsTurnInPlace && !IsSmoothedListenServerPawn())
 	{
 		EndTurnInPlace(true);
+	}
+
+	if (!IsSmoothedListenServerPawn())
+	{
+		UpdateAllPredictions(DeltaTime);		
 	}
 }
 
@@ -485,6 +466,8 @@ void UGMCE_OrganicMovementCmp::GenAncillaryTick_Implementation(float DeltaTime, 
                                                                bool bCombinedClientMove)
 {
 	Super::GenAncillaryTick_Implementation(DeltaTime, bLocalMove, bCombinedClientMove);
+
+	UpdateAllPredictions(DeltaTime);
 }
 
 bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_FloorParams& Floor, float DeltaSeconds)
@@ -932,6 +915,31 @@ bool UGMCE_OrganicMovementCmp::IsInputPresent(bool bAllowGrace) const
 	return bInputPresent;
 }
 
+void UGMCE_OrganicMovementCmp::UpdateAllPredictions(float DeltaTime)
+{
+	if (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne)
+	{
+		if (GetMovementMode() == EGMC_MovementMode::Grounded)
+		{
+			if (bPrecalculateDistanceMatches)
+			{
+				UpdateStopPrediction(DeltaTime);
+				UpdatePivotPrediction(DeltaTime);
+				UpdateStartPrediction(DeltaTime);
+			}
+		}
+
+		if (bTrajectoryEnabled)
+		{
+			UpdateMovementSamples();
+			if (bPrecalculateFutureTrajectory)
+			{
+				UpdateTrajectoryPrediction();
+			}
+		}
+	}
+}
+
 void UGMCE_OrganicMovementCmp::UpdateCalculatedEffectiveAcceleration()
 {
 	if (GetLinearVelocity_GMC().IsZero())
@@ -961,7 +969,7 @@ void UGMCE_OrganicMovementCmp::UpdatePivotPrediction(float DeltaTime)
 {
 	const FRotator Rotation = GetActorRotation_GMC();
 
-	PredictedPivotPoint = PredictGroundedPivotLocation(GetCurrentEffectiveAcceleration(), GetLinearVelocity_GMC(), Rotation, GroundFriction, DeltaTime, FMath::Clamp(PivotPredictionAngleThreshold, 90.f, 179.f));
+	PredictedPivotPoint = PredictGroundedPivotLocation(GetCurrentEffectiveAcceleration(), GetLinearVelocity_GMC(), Rotation, GroundFriction, DeltaTime, FMath::Clamp(PivotPredictionAngleThreshold, 30.f, 179.f));
 	bTrajectoryIsPivoting = !PredictedPivotPoint.IsZero() && IsInputPresent() && DoInputAndVelocityDiffer();	
 }
 

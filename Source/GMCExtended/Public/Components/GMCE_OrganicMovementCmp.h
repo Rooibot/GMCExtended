@@ -294,6 +294,8 @@ public:
 
 private:
 
+	void UpdateAllPredictions(float DeltaTime);
+
 	void UpdateCalculatedEffectiveAcceleration();
 	
 	// Input state, for stop detection
