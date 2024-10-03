@@ -1312,7 +1312,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 		if (!AccelerationRotation.IsNearlyZero())
 		{
 			PredictedAcceleration = AccelerationRotation.RotateVector(PredictedAcceleration);
-			AccelerationRotation.Yaw /= 1.1;
+			// AccelerationRotation.Yaw /= 1.1;
 		}
 
 		
