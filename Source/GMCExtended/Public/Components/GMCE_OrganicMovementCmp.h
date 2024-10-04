@@ -240,11 +240,6 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Animation Helpers")
 	bool bUsePreciseRemoteInput { false };
-
-	/// The amount by which our input vector needs to differ from the last value
-	/// before we will update it, when using precise remote input.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Animation Helpers")
-	float PreciseInputTolerance { 0.05f };
 	
 protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
@@ -282,9 +277,6 @@ protected:
 	int32 BI_LastLandingVelocity { -1 };
 
 	FVector PreciseProcessedInputVector { 0.f };
-	bool bPreciseRawFlipFlop { false };
-	FVector LastRawInput { 0.f };
-	FVector LastPreciseInput { 0.f };
 
 	int32 BI_PreciseProcessedInputVector { -1 };
 	

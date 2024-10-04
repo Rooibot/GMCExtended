@@ -435,28 +435,12 @@ void UGMCE_OrganicMovementCmp::MovementUpdate_Implementation(float DeltaSeconds)
 	InputVelocityOffset = UGMCE_UtilityLibrary::GetAngleDifferenceXY(GetLinearVelocity_GMC(), GetProcessedInputVector());
 	CalculatedEffectiveAcceleration = GetTransientAcceleration();
 
-	if (bUsePreciseRemoteInput && FMath::Abs(RawInputVector.Length() - PreciseProcessedInputVector.Length()) >= PreciseInputTolerance)
-	{
-		PreciseProcessedInputVector = RawInputVector;
-		if (!RawInputVector.IsZero())
-			UE_LOG(LogGMCExtended, Log, TEXT("Clt: raw %s"), *RawInputVector.ToCompactString())
-	}
+	PreciseProcessedInputVector = RawInputVector;
 }
 
 void UGMCE_OrganicMovementCmp::MovementUpdateSimulated_Implementation(float DeltaSeconds)
 {
 	Super::MovementUpdateSimulated_Implementation(DeltaSeconds);
-	
-	if (RawInputVector != LastRawInput)
-	{
-		LastRawInput = RawInputVector;
-		bPreciseRawFlipFlop = false;
-	}
-	else if (LastPreciseInput != PreciseProcessedInputVector && bUsePreciseRemoteInput)
-	{
-		LastPreciseInput = PreciseProcessedInputVector;
-		bPreciseRawFlipFlop = true;
-	}
 
 }
 
@@ -939,7 +923,14 @@ void UGMCE_OrganicMovementCmp::CalculateAimYawRemaining(const FVector& Direction
 
 FVector UGMCE_OrganicMovementCmp::GetAnimationInputAcceleration()
 {
-	return PreProcessInputVector(RawInputVector) * GetInputAcceleration();
+	FVector UseInput = RawInputVector;
+
+	if (bUsePreciseRemoteInput && IsSimulatedProxy() && !IsSmoothedListenServerPawn())
+	{
+		UseInput = PreciseProcessedInputVector;
+	}
+	
+	return PreProcessInputVector(UseInput) * GetInputAcceleration();
 }
 
 #pragma endregion
@@ -1182,11 +1173,11 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	FRotator CurrentMeshOffsetRotation = MeshOffset.Rotator();
 	FVector CurrentVelocity = GetLinearVelocity_GMC();
 
-	if (!CurrentVelocity.IsZero() || !PredictedAcceleration.IsZero())
-	{
-		UE_LOG(LogGMCExtended, Log, TEXT("[%20s] vel %s acc %s"), *GetNetRoleAsString(GetOwnerRole()), *CurrentVelocity.ToCompactString(), *PredictedAcceleration.ToCompactString())
-	}
-	
+	const FVector InitialAccel = PredictedAcceleration;
+	FVector Deceleration;
+	float DistanceTraveled = 0.f;
+	int SampleCount = 0;
+
 	for (int32 Idx = 0; Idx < TotalSimulatedSamples; Idx++)
 	{
 		if (!RotationVelocityPerSample.IsNearlyZero())
@@ -1212,7 +1203,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 		}
 		
 		const float DecelerationScale = FMath::Clamp(1.f - (PredictedAcceleration.GetSafeNormal() | CurrentVelocity.GetSafeNormal()), 0.f, 1.f);
-		FVector Deceleration = GetBrakingDeceleration() * DecelerationScale * -CurrentVelocity.GetSafeNormal() * BrakingFriction;
+		Deceleration = GetBrakingDeceleration() * DecelerationScale * -CurrentVelocity.GetSafeNormal() * BrakingFriction;
 
 		if (EffectiveMovementMode == EGMC_MovementMode::Airborne && Deceleration.Z < 0.f)
 		{
@@ -1319,6 +1310,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 				{
 					// Handle transition to falling.
 					EffectiveMovementMode = EGMC_MovementMode::Airborne;
+					PredictedAcceleration = FVector::ZeroVector;
 					BrakingDeceleration = BrakingDecelerationAirborne;
 					BrakingFriction = 1.f;
 					MaxSpeed = GetMaxSpeed();
@@ -1330,8 +1322,8 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 					// Handle transition to ground
 					EffectiveMovementMode = EGMC_MovementMode::Grounded;
 					CurrentVelocity.Z = 0.f;
-					PredictedAcceleration = TransformInputVectorAbsoluteZ(GetRawInputVector()) * GetInputAcceleration();
-					PredictedAcceleration = PredictedAcceleration.GetClampedToMaxSize(GetMaxSpeed());
+					PredictedAcceleration = GetAnimationInputAcceleration();
+					PredictedAcceleration = PredictedAcceleration.GetClampedToMaxSize(GetInputAcceleration());
 					PredictedAcceleration.Z = 0.f;
 					BrakingDeceleration = BrakingDecelerationGrounded;
 					BrakingFriction = GetGroundFriction();
@@ -1347,6 +1339,8 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 		const FRotator FacingRotation = NewTransform.GetRotation().Rotator() - MeshOffset.Rotator();
 
 		const FTransform ActorTransform = FTransform(FacingRotation, CurrentLocation);
+
+		DistanceTraveled += (CurrentLocation - PreviousLocation).Size();
 		
 		SimulatedSample = FGMCE_MovementSample();
 		SimulatedSample.RelativeTransform = NewRelativeTransform;
@@ -1363,14 +1357,22 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 
 		Predictions.Samples.Emplace(SimulatedSample);
 
+		SampleCount++;
+
 		// Rotate acceleration at the end, so we can handle deceleration in a sane fashion.
 		if (!AccelerationRotation.IsNearlyZero())
 		{
 			PredictedAcceleration = AccelerationRotation.RotateVector(PredictedAcceleration);
 			// AccelerationRotation.Yaw /= 1.1;
 		}
+	}
 
-		
+	if (GetNetMode() != NM_DedicatedServer)
+	{
+		if (!PredictedAcceleration.IsZero() || !InitialAccel.IsZero())
+		{
+			UE_LOG(LogGMCExtended, Log, TEXT("[%12s] trav %f (%d samples %f time) end %s: acc %s -> %s dec %s"), *GetNetRoleAsString(GetOwnerRole()), DistanceTraveled, SampleCount, TimePerSample, *CurrentVelocity.ToCompactString(), *InitialAccel.ToCompactString(), *PredictedAcceleration.ToCompactString(), *Deceleration.ToCompactString())
+		}
 	}
 
 	return Predictions;	
