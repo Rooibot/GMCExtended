@@ -1174,6 +1174,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	FVector CurrentVelocity = GetLinearVelocity_GMC();
 
 	const FVector InitialAccel = PredictedAcceleration;
+	const FVector InitialVel = CurrentVelocity;
 	FVector Deceleration;
 	float DistanceTraveled = 0.f;
 	int SampleCount = 0;
@@ -1262,8 +1263,6 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 		}
 		else
 		{
-			CurrentVelocity += PredictedAcceleration * TimePerSample;
-			
 			const FVector AccelerationDirection = PredictedAcceleration.GetSafeNormal();
 			const float Speed = CurrentVelocity.Size();
 
@@ -1371,7 +1370,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	{
 		if (!PredictedAcceleration.IsZero() || !InitialAccel.IsZero())
 		{
-			UE_LOG(LogGMCExtended, Log, TEXT("[%12s] trav %f (%d samples %f time) end %s: acc %s -> %s dec %s"), *GetNetRoleAsString(GetOwnerRole()), DistanceTraveled, SampleCount, TimePerSample, *CurrentVelocity.ToCompactString(), *InitialAccel.ToCompactString(), *PredictedAcceleration.ToCompactString(), *Deceleration.ToCompactString())
+			UE_LOG(LogGMCExtended, Log, TEXT("[%12s] trav %f (%d samples %f time) start %s end %s: acc %s -> %s dec %s"), *GetNetRoleAsString(GetOwnerRole()), DistanceTraveled, SampleCount, TimePerSample,  *InitialVel.ToCompactString(), *CurrentVelocity.ToCompactString(), *InitialAccel.ToCompactString(), *PredictedAcceleration.ToCompactString(), *Deceleration.ToCompactString())
 		}
 	}
 
