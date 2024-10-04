@@ -11,7 +11,7 @@ void FGMCE_MovementSample::DrawDebug(const UWorld* World, const FTransform& From
 	const float ArrowSize = UKismetMathLibrary::MapRangeClamped(RelativeLinearVelocity.Length(), 0, 800, 5, 30);
 	const float ArrowThickness = UKismetMathLibrary::MapRangeClamped(RelativeLinearVelocity.Length(), 0, 800, 1, 3);
 	
-	DrawDebugDirectionalArrow(World, PositionWS, WorldVelocity, ArrowSize, Color, false, (AccumulatedSeconds > 0.f) ? LifeTime : -1, 0, ArrowThickness);
+	DrawDebugDirectionalArrow(World, PositionWS, WorldVelocity, ArrowSize, AccumulatedSeconds != 0 ? Color : FColor::White, false, (AccumulatedSeconds > 0.f) ? LifeTime : -1, 0, ArrowThickness);
 
 	const FVector WorldFacingStart = PositionWS + (FVector::UpVector * 5.f);
 	const FVector WorldFacingEnd = WorldFacingStart + (ActorWorldTransform.GetRotation().GetForwardVector() * 10.f);

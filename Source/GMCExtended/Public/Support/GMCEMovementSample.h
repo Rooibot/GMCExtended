@@ -108,7 +108,7 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 		const float TimeRatio = 1.f / ( AccumulatedSeconds - OtherSample.AccumulatedSeconds );
 
 		const FVector Travel = WorldLinearVelocity - OtherSample.WorldLinearVelocity;
-		return Travel / TimeRatio;		
+		return Travel / TimeRatio;
 	}
 
 	bool IsZeroSample() const

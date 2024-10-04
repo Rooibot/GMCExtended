@@ -84,6 +84,8 @@ public:
 	virtual float GetInputAccelerationCustom_Implementation() const override;
 	virtual void CalculateVelocity(float DeltaSeconds) override;
 
+	virtual void ApplyDirectionalInput(const FInputActionInstance& InputAction) override;
+	
 	virtual void OnLanded_Implementation(const FVector& ImpactVelocity) override;
 
 	virtual void RotateYawTowardsDirection(const FVector& Direction, float Rate, float DeltaTime) override;
@@ -225,7 +227,10 @@ public:
 
 	float GetAimYawRemaining() const { return AimYawRemaining; }
 	float GetComponentYawRemaining() const { return ComponentYawRemaining; }
-	
+
+	UFUNCTION(BlueprintCallable, Category="Animation Helpers")
+	FVector GetAnimationInputAcceleration();
+
 	FOnProcessRootMotionGMC ProcessRootMotionPreConvertToWorld;
 	FOnSyncDataApplied OnSyncDataAppliedDelegate;
 	FOnBindReplicationData OnBindReplicationData;
@@ -233,6 +238,14 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	FVector LastLandingVelocity { 0.f };
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Animation Helpers")
+	bool bUsePreciseRemoteInput { false };
+
+	/// The amount by which our input vector needs to differ from the last value
+	/// before we will update it, when using precise remote input.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Animation Helpers")
+	float PreciseInputTolerance { 0.05f };
+	
 protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	FRotator CurrentAimRotation { FRotator::ZeroRotator };
@@ -267,6 +280,13 @@ protected:
 	FVector LastAnimationVelocity { 0.f };
 
 	int32 BI_LastLandingVelocity { -1 };
+
+	FVector PreciseProcessedInputVector { 0.f };
+	bool bPreciseRawFlipFlop { false };
+	FVector LastRawInput { 0.f };
+	FVector LastPreciseInput { 0.f };
+
+	int32 BI_PreciseProcessedInputVector { -1 };
 	
 
 #pragma endregion
@@ -402,6 +422,10 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category="Movement Trajectory", meta=(AllowPrivateAccess=true))
 	bool bDrawDebugPredictions { false };
 
+	/// Should we draw *only* the trajectory, skipping pivot/stop markers? Only valid in editor.
+	UPROPERTY(EditDefaultsOnly, Category="Movement Trajectory", meta=(AllowPrivateAccess=true))
+	bool bDrawTrajectoryOnly { false };
+	
 	/// How long should our future predictions persist on screen for? -1 is 'one frame'. Only valid in editor.
 	UPROPERTY(EditDefaultsOnly, Category="Movement Trajectory", meta=(AllowPrivateAccess=true))
 	float DebugPredictionLifeTime { -1.f };
@@ -428,7 +452,7 @@ public:
 	/// Given the historical samples, predict the future trajectory a character will take. Coordinates are relative
 	/// to the origin point provided.
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
-	FGMCE_MovementSampleCollection PredictMovementFuture(const FTransform& FromOrigin, const FRotator& ControllerRotation, const FQuat& MeshOffset, bool bIncludeHistory) const;
+	FGMCE_MovementSampleCollection PredictMovementFuture(const FTransform& FromOrigin, const FRotator& ControllerRotation, const FQuat& MeshOffset, bool bIncludeHistory);
 
 	/// Update the cached trajectory prediction. Called automatically if trajectory precalculation is enabled.
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")

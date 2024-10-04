@@ -2,6 +2,7 @@
 
 #include "GMCExtendedLog.h"
 #include "GMCE_TrackedCurveProvider.h"
+#include "GMCPawn.h"
 #include "DSP/MelScale.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -59,7 +60,7 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	UpdateAllPredictions(DeltaTime);
+	// UpdateAllPredictions(DeltaTime);
 	
 	// Ragdoll nonsense.
 	if (bResetMesh && IsValid(SkeletalMesh))
@@ -194,21 +195,21 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 	if (IsTrajectoryDebugEnabled() && !IsNetMode(NM_DedicatedServer) && (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne))
 	{
 		const FVector ActorLocation = GetActorLocation_GMC();
-		if (bTrajectoryIsStopping || (bDebugHadPreviousStop && GetLinearVelocity_GMC().IsZero()))
+		if (!bDrawTrajectoryOnly && (bTrajectoryIsStopping || (bDebugHadPreviousStop && GetLinearVelocity_GMC().IsZero())))
 		{
 			if (bTrajectoryIsStopping) DebugPreviousStop = ActorLocation + PredictedStopPoint;
 			DrawDebugSphere(GetWorld(), DebugPreviousStop, 24.f, 12, bTrajectoryIsStopping ? FColor::Blue : FColor::Black, false, bTrajectoryIsStopping ? -1 : 1.f, 0, bTrajectoryIsStopping ? 1.f: 2.f);
 			bDebugHadPreviousStop = bTrajectoryIsStopping;
 		}
 		
-		if (bTrajectoryIsPivoting || (bDebugHadPreviousPivot && !DoInputAndVelocityDiffer()))
+		if (!bDrawTrajectoryOnly && (bTrajectoryIsPivoting || (bDebugHadPreviousPivot && !DoInputAndVelocityDiffer())))
 		{
 			if (bTrajectoryIsPivoting) DebugPreviousPivot = ActorLocation + PredictedPivotPoint;
 			DrawDebugSphere(GetWorld(), DebugPreviousPivot, 24.f, 12, bTrajectoryIsPivoting ? FColor::Yellow : FColor::White, false, bTrajectoryIsPivoting ? -1 : 2.f, 0, bTrajectoryIsPivoting ? 1.f : 2.f);
 			bDebugHadPreviousPivot = bTrajectoryIsPivoting;
 		}
 
-		if (DoInputAndVelocityDiffer())
+		if (!bDrawTrajectoryOnly && DoInputAndVelocityDiffer())
 		{
 			const FVector LinearVelocityDirection = GetLinearVelocity_GMC().GetSafeNormal();
 			const FVector AccelerationDirection = UKismetMathLibrary::RotateAngleAxis(LinearVelocityDirection, InputVelocityOffsetAngle(), FVector(0.f, 0.f, 1.f));
@@ -262,6 +263,20 @@ void UGMCE_OrganicMovementCmp::BindReplicationData_Implementation()
 		EGMC_InterpolationFunction::Linear
 	);
 
+	BI_PreciseProcessedInputVector = BindCompressedVector(
+		PreciseProcessedInputVector,
+		EGMC_PredictionMode::ClientAuth_Input,
+		EGMC_CombineMode::CombineIfUnchanged,
+		EGMC_SimulationMode::PeriodicAndOnChange_InputOutput,
+		EGMC_InterpolationFunction::NearestNeighbour);
+
+	BindBool(
+		bUsePreciseRemoteInput,
+		EGMC_PredictionMode::ServerAuth_Input_ClientValidated,
+		EGMC_CombineMode::CombineIfUnchanged,
+		EGMC_SimulationMode::PeriodicAndOnChange_Output,
+		EGMC_InterpolationFunction::NearestNeighbour);
+	
 	/// Vector representing our last landing impact. This is replicated so that
 	/// simulated proxies can determine whether to play 'heavy' or 'light' land
 	/// animations.
@@ -415,21 +430,34 @@ void UGMCE_OrganicMovementCmp::MovementUpdate_Implementation(float DeltaSeconds)
 {
 	Super::MovementUpdate_Implementation(DeltaSeconds);
 
-	if (!IsSimulatedProxy() || IsNetMode(NM_Standalone))
+	// If we're a locally-controlled pawn (or the server), we have data on current input.
+	bInputPresent = !GetProcessedInputVector().IsZero();
+	InputVelocityOffset = UGMCE_UtilityLibrary::GetAngleDifferenceXY(GetLinearVelocity_GMC(), GetProcessedInputVector());
+	CalculatedEffectiveAcceleration = GetTransientAcceleration();
+
+	if (bUsePreciseRemoteInput && FMath::Abs(RawInputVector.Length() - PreciseProcessedInputVector.Length()) >= PreciseInputTolerance)
 	{
-		// If we're a locally-controlled pawn (or the server), we have data on current input.
-		bInputPresent = !GetProcessedInputVector().IsZero();
-		InputVelocityOffset = UGMCE_UtilityLibrary::GetAngleDifferenceXY(GetLinearVelocity_GMC(), GetProcessedInputVector());
-		CalculatedEffectiveAcceleration = GetTransientAcceleration();
+		PreciseProcessedInputVector = RawInputVector;
+		if (!RawInputVector.IsZero())
+			UE_LOG(LogGMCExtended, Log, TEXT("Clt: raw %s"), *RawInputVector.ToCompactString())
 	}
 }
 
 void UGMCE_OrganicMovementCmp::MovementUpdateSimulated_Implementation(float DeltaSeconds)
 {
 	Super::MovementUpdateSimulated_Implementation(DeltaSeconds);
+	
+	if (RawInputVector != LastRawInput)
+	{
+		LastRawInput = RawInputVector;
+		bPreciseRawFlipFlop = false;
+	}
+	else if (LastPreciseInput != PreciseProcessedInputVector && bUsePreciseRemoteInput)
+	{
+		LastPreciseInput = PreciseProcessedInputVector;
+		bPreciseRawFlipFlop = true;
+	}
 
-	
-	
 }
 
 void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
@@ -439,6 +467,11 @@ void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
 	// If we're being simulated, we should always synthesize an acceleration from past movements.
 	UpdateAnimationHelperValues(DeltaTime);
 	UpdateCalculatedEffectiveAcceleration();
+
+	if (!IsSmoothedListenServerPawn())
+	{
+		UpdateAllPredictions(DeltaTime);
+	}
 	
 	UpdateTurnInPlaceState(true);
 
@@ -463,7 +496,8 @@ void UGMCE_OrganicMovementCmp::GenAncillaryTick_Implementation(float DeltaTime, 
                                                                bool bCombinedClientMove)
 {
 	Super::GenAncillaryTick_Implementation(DeltaTime, bLocalMove, bCombinedClientMove);
-	
+
+	UpdateAllPredictions(DeltaTime);
 }
 
 bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_FloorParams& Floor, float DeltaSeconds)
@@ -768,6 +802,11 @@ void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 	}
 }
 
+void UGMCE_OrganicMovementCmp::ApplyDirectionalInput(const FInputActionInstance& InputAction)
+{
+	Super::ApplyDirectionalInput(InputAction);
+}
+
 void UGMCE_OrganicMovementCmp::OnLanded_Implementation(const FVector& ImpactVelocity)
 {
 	Super::OnLanded_Implementation(ImpactVelocity);
@@ -896,6 +935,11 @@ void UGMCE_OrganicMovementCmp::CalculateAimYawRemaining(const FVector& Direction
 	}
 
 	AimYawRemaining = UKismetMathLibrary::FindRelativeLookAtRotation(GetActorTransform(), GetActorLocation_GMC() + DirectionVector).Yaw;
+}
+
+FVector UGMCE_OrganicMovementCmp::GetAnimationInputAcceleration()
+{
+	return PreProcessInputVector(RawInputVector) * GetInputAcceleration();
 }
 
 #pragma endregion
@@ -1075,7 +1119,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::GetMovementHistory(bool
 }
 
 FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(const FTransform& FromOrigin,
-	const FRotator& ControllerRotation, const FQuat& MeshOffset, bool bIncludeHistory) const
+	const FRotator& ControllerRotation, const FQuat& MeshOffset, bool bIncludeHistory)
 {
 	const float TimePerSample = 1.f / TrajectorySimSampleRate;
 	const int32 TotalSimulatedSamples = FMath::TruncToInt32(TrajectorySimSampleRate * TrajectorySimSeconds);
@@ -1110,19 +1154,21 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 
 	EGMC_MovementMode EffectiveMovementMode = GetMovementMode();
 
-	if (IsInputPresent() && EffectiveMovementMode == EGMC_MovementMode::Grounded)
+	const FVector CalculatedAcceleration = PredictedAcceleration;
+	PredictedAcceleration = GetAnimationInputAcceleration();
+	PredictedAcceleration.Z = 0.f;
+
+	FRotator AccelerationRotation;
+	if (bTrajectoryUsesControllerRotation)
 	{
-		PredictedAcceleration = TransformInputVectorAbsoluteZ(GetRawInputVector()) * GetInputAcceleration();
+		AccelerationRotation = ControllerRotationVelocityPerSample;
 	}
 	else
 	{
-		PredictedAcceleration = FVector::ZeroVector;
+		AccelerationRotation = RotationVelocityPerSample;
 	}
-		
-	PredictedAcceleration.Z = 0.f;
 
-	FRotator AccelerationRotation = ControllerRotationVelocityPerSample;
-
+	
 	float BrakingDeceleration = GetBrakingDeceleration();
 	float BrakingFriction = IsAirborne() ? 1.f : GetGroundFriction();
 	float MaxSpeed = GetMaxSpeed();
@@ -1136,6 +1182,11 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	FRotator CurrentMeshOffsetRotation = MeshOffset.Rotator();
 	FVector CurrentVelocity = GetLinearVelocity_GMC();
 
+	if (!CurrentVelocity.IsZero() || !PredictedAcceleration.IsZero())
+	{
+		UE_LOG(LogGMCExtended, Log, TEXT("[%20s] vel %s acc %s"), *GetNetRoleAsString(GetOwnerRole()), *CurrentVelocity.ToCompactString(), *PredictedAcceleration.ToCompactString())
+	}
+	
 	for (int32 Idx = 0; Idx < TotalSimulatedSamples; Idx++)
 	{
 		if (!RotationVelocityPerSample.IsNearlyZero())
