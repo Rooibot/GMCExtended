@@ -228,9 +228,8 @@ public:
 	float GetAimYawRemaining() const { return AimYawRemaining; }
 	float GetComponentYawRemaining() const { return ComponentYawRemaining; }
 
-	UFUNCTION(BlueprintCallable, Category="Animation Helpers")
-	FVector GetAnimationInputAcceleration();
-
+	float GetMaxPredictionSpeed(const FVector& InputVector);
+	
 	FOnProcessRootMotionGMC ProcessRootMotionPreConvertToWorld;
 	FOnSyncDataApplied OnSyncDataAppliedDelegate;
 	FOnBindReplicationData OnBindReplicationData;
@@ -238,9 +237,6 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	FVector LastLandingVelocity { 0.f };
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Animation Helpers")
-	bool bUsePreciseRemoteInput { false };
-	
 protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	FRotator CurrentAimRotation { FRotator::ZeroRotator };
@@ -275,11 +271,6 @@ protected:
 	FVector LastAnimationVelocity { 0.f };
 
 	int32 BI_LastLandingVelocity { -1 };
-
-	FVector PreciseProcessedInputVector { 0.f };
-
-	int32 BI_PreciseProcessedInputVector { -1 };
-	
 
 #pragma endregion
 	
@@ -519,6 +510,7 @@ protected:
 	/// Get our current acceleration and rotational velocity from our historical movement samples.
 	void GetCurrentAccelerationRotationVelocityFromHistory(FVector& OutAcceleration, FRotator& OutRotationVelocity, const EGMCE_TrajectoryRotationType& RotationType) const;
 
+	FVector GetCurrentVelocityFromHistory();
 	
 private:
 

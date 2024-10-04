@@ -38,7 +38,7 @@ public class GMCExtended : ModuleRules
 				"Core",
 				"GMCCore",
 				"GameplayTags", "PoseSearch",
-				"StructUtils"
+				"StructUtils", "EnhancedInput"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);

@@ -70,7 +70,7 @@ void UGMCE_BaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	AimYawRemaining = MovementComponent->GetAimYawRemaining();
 	ComponentYawRemaining = MovementComponent->GetComponentYawRemaining();
 	
-	InputAcceleration = MovementComponent->GetAnimationInputAcceleration();
+	InputAcceleration = MovementComponent->GetProcessedInputVector() * MovementComponent->GetInputAcceleration();
 	InputDirection = InputAcceleration.GetSafeNormal();
 
 	AimOffset = UKismetMathLibrary::NormalizedDeltaRotator(AimRotation, WorldRotation);
