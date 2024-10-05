@@ -457,6 +457,17 @@ public:
 	/// If true, trajectory will be calculated based on the controller rotation rather than the character rotation.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory")
 	bool bTrajectoryUsesControllerRotation { false };
+
+	/// If true (and trajectory is using controller rotation), acceleration direction will stop rotating when it's
+	/// a close match to the current controller rotation.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory")
+	bool bTrajectoryStopsAtControllerRotation { true };
+
+	/// This value will be used to decay rotations in trajectory prediction. This does not
+	/// apply to the acceleration rotation if you are using controller rotation and have
+	/// trajectory stops at controller rotation set to true.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory")
+	float TrajectoryRotationDecay { 1.1f };
 	
 	/// The maximum size of the trajectory sample history.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Movement Trajectory")

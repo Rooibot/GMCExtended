@@ -1346,7 +1346,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 
 		SampleCount++;
 
-		if (bTrajectoryUsesControllerRotation)
+		if (bTrajectoryUsesControllerRotation && bTrajectoryStopsAtControllerRotation)
 		{
 			float ControllerYawDelta = FMath::Abs(FRotator::NormalizeAxis(GetControllerRotation_GMC().Yaw) - FRotator::NormalizeAxis(ControllerRotation.Yaw));
 			if (ControllerYawDelta <= 0.5f)
@@ -1360,11 +1360,11 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 		if (!AccelerationRotation.IsNearlyZero())
 		{
 			PredictedAcceleration = AccelerationRotation.RotateVector(PredictedAcceleration);
-			if (!bTrajectoryUsesControllerRotation)
+			if (!bTrajectoryUsesControllerRotation || !bTrajectoryStopsAtControllerRotation)
 			{
 				// If we use controller rotation, we stop when we're near our current rotation.
 				// If we're using velocity rotation, we need to decay our rotation a bit.
-				AccelerationRotation.Yaw /= 1.1f;
+				AccelerationRotation.Yaw /= TrajectoryRotationDecay ? TrajectoryRotationDecay : 1.1f;
 			}
 		}
 	}
