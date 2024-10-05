@@ -12,7 +12,8 @@ enum class EGMCE_TrajectoryRotationType : uint8
 	Actor,
 	Component,
 	Controller,
-	MeshOffset
+	MeshOffset,
+	Travel
 };
 
 USTRUCT(BlueprintType)
@@ -92,6 +93,9 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 			break;
 		case EGMCE_TrajectoryRotationType::MeshOffset:
 			Delta = (MeshComponentRelativeRotation.Rotator() - OtherSample.MeshComponentRelativeRotation.Rotator()).GetNormalized();
+			break;
+		case EGMCE_TrajectoryRotationType::Travel:
+			Delta = FQuat::FindBetween(OtherSample.WorldLinearVelocity, WorldLinearVelocity).Rotator().GetNormalized();
 			break;
 		}
 

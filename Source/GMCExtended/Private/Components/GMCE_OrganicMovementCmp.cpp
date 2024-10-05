@@ -1121,6 +1121,9 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	RotationVelocity = FRotator(0.f, FMath::Clamp(RotationVelocity.Yaw, -RotationRate, RotationRate), 0.f);
 	FRotator RotationVelocityPerSample = RotationVelocity * TimePerSample;
 
+	FRotator TravelRotation;
+	GetCurrentAccelerationRotationVelocityFromHistory(TempVector, TravelRotation, EGMCE_TrajectoryRotationType::Travel);	
+	
 	FRotator ControllerRotationVelocity;
 	GetCurrentAccelerationRotationVelocityFromHistory(TempVector, ControllerRotationVelocity, EGMCE_TrajectoryRotationType::Controller);
 	FRotator ControllerRotationVelocityPerSample = FRotator(0.f, ControllerRotationVelocity.Yaw, 0.f) * TimePerSample;
@@ -1134,16 +1137,18 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 	PredictedAcceleration = InputVector * GetInputAcceleration();
 	PredictedAcceleration.Z = 0.f;
 
-	FRotator AccelerationRotation;
+	FRotator RotationToUse;
 	if (bTrajectoryUsesControllerRotation)
 	{
-		AccelerationRotation = ControllerRotationVelocityPerSample;
+		RotationToUse = ControllerRotationVelocity;
 	}
 	else
 	{
-		AccelerationRotation = RotationVelocityPerSample;
+		RotationToUse = TravelRotation;
 	}
-
+	
+	RotationToUse.Yaw = FMath::Min(RotationToUse.Yaw, RotationRate);
+	FRotator AccelerationRotation = RotationToUse * TimePerSample;
 	
 	float BrakingDeceleration = GetBrakingDeceleration();
 	float BrakingFriction = IsAirborne() ? 1.f : GetGroundFriction();
@@ -1341,11 +1346,26 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 
 		SampleCount++;
 
+		if (bTrajectoryUsesControllerRotation)
+		{
+			float ControllerYawDelta = FMath::Abs(FRotator::NormalizeAxis(GetControllerRotation_GMC().Yaw) - FRotator::NormalizeAxis(ControllerRotation.Yaw));
+			if (ControllerYawDelta <= 0.5f)
+			{
+				AccelerationRotation = FRotator::ZeroRotator;
+				ControllerRotationVelocityPerSample = FRotator::ZeroRotator;
+			}
+		}
+		
 		// Rotate acceleration at the end, so we can handle deceleration in a sane fashion.
 		if (!AccelerationRotation.IsNearlyZero())
 		{
 			PredictedAcceleration = AccelerationRotation.RotateVector(PredictedAcceleration);
-			// AccelerationRotation.Yaw /= 1.1;
+			if (!bTrajectoryUsesControllerRotation)
+			{
+				// If we use controller rotation, we stop when we're near our current rotation.
+				// If we're using velocity rotation, we need to decay our rotation a bit.
+				AccelerationRotation.Yaw /= 1.1f;
+			}
 		}
 	}
 

@@ -399,12 +399,12 @@ bool UGMCE_BaseSolver::CapsuleTraceMultiByProfile(const FVector Start, const FVe
 bool UGMCE_BaseSolver::PlayMontageBlocking(USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage,
 	float StartPosition, float PlayRate)
 {
-	if (!MovementComponent->PlayMontage_Blocking(SkeletalMeshComponent, SolverMontageTracker, Montage, StartPosition, PlayRate))
+	if (!MovementComponent->PlayMontage_Blocking(SkeletalMeshComponent, MovementComponent->MontageTracker, Montage, StartPosition, PlayRate))
 	{
 		return false;
 	}
-	MovementComponent->SetMontageStartDelegate(MontageDelegate_OnStart, SolverMontageTracker);
-	MovementComponent->SetMontageCompleteDelegate(MontageDelegate_OnComplete, SolverMontageTracker);
+	MovementComponent->SetMontageStartDelegate(MontageDelegate_OnStart, MovementComponent->MontageTracker);
+	MovementComponent->SetMontageCompleteDelegate(MontageDelegate_OnComplete, MovementComponent->MontageTracker);
 	return true;
 }
 
