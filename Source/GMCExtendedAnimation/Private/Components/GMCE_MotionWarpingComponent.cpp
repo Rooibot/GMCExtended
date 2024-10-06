@@ -2,6 +2,7 @@
 #include "Animation/AnimNotifyState_GMCExMotionWarp.h"
 #include "GMCExtendedAnimation.h"
 #include "GMCExtendedAnimationLog.h"
+#include "GMCE_MotionWarpingUtilities.h"
 #include "GMCE_MotionWarpTarget.h"
 #include "GMCE_RootMotionModifier_SkewWarp.h"
 #include "GMCE_RootMotionModifier_Warp.h"
@@ -269,9 +270,22 @@ void UGMCE_MotionWarpingComponent::BindToMovementComponent()
 	}	
 }
 
+void UGMCE_MotionWarpingComponent::GetLastRootMotionStep(FTransform& OutLastDelta, float &OutLastDeltaTime)
+{
+	OutLastDelta = GetMovementComponent()->GetSkeletalMeshReference()->ConvertLocalRootMotionToWorld(LastRootTransform);
+	OutLastDeltaTime = LastDeltaTime;
+}
+
 FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InTransform,
                                                            UGMCE_OrganicMovementCmp* GMCMovementComponent, float DeltaSeconds)
 {
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	if (FGMCE_MotionWarpCvars::CVarMotionWarpingDisable.GetValueOnGameThread() > 0)
+	{
+		return InTransform;
+	}
+#endif
+	
 	MotionWarpSubject->MotionWarping_GetMeshComponent()->GetAnimInstance();
 	
 	// Check for warping windows and update modifier states
@@ -287,6 +301,49 @@ FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InT
 			FinalRootMotion = Modifier->ProcessRootMotion(FinalRootMotion, DeltaSeconds);
 		}
 	}
+
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	USkeletalMeshComponent* MeshCmp = GMCMovementComponent->GetSkeletalMeshReference();
+	const int32 DebugLevel = FGMCE_MotionWarpCvars::CVarMotionWarpingDebug.GetValueOnGameThread();
+	const float DrawDebugDuration = FGMCE_MotionWarpCvars::CVarMotionWarpingDrawDebugDuration.GetValueOnGameThread();
+	if (DebugLevel >= 2 && IsValid(MeshCmp))
+	{
+		const float PointSize = 7.f;
+		const FVector ActorFeetLocation = GMCMovementComponent->GetLowerBound();
+		if (Modifiers.Num() > 0)
+		{
+			if (!OriginalRootMotionAccum.IsSet())
+			{
+				OriginalRootMotionAccum = ActorFeetLocation;
+				WarpedRootMotionAccum = ActorFeetLocation;
+			}
+
+			OriginalRootMotionAccum = OriginalRootMotionAccum.GetValue() + (MeshCmp->ConvertLocalRootMotionToWorld(FTransform(InTransform.GetLocation()))).GetLocation();
+			WarpedRootMotionAccum = WarpedRootMotionAccum.GetValue() + (MeshCmp->ConvertLocalRootMotionToWorld(FTransform(FinalRootMotion.GetLocation()))).GetLocation();
+
+			DrawDebugPoint(GetWorld(), OriginalRootMotionAccum.GetValue(), PointSize, FColor::Red, false, DrawDebugDuration, 0);
+			DrawDebugPoint(GetWorld(), WarpedRootMotionAccum.GetValue(), PointSize, FColor::Green, false, DrawDebugDuration, 0);
+		}
+		else
+		{
+			OriginalRootMotionAccum.Reset();
+			WarpedRootMotionAccum.Reset();
+		}
+
+		DrawDebugPoint(GetWorld(), ActorFeetLocation, PointSize, FColor::Blue, false, DrawDebugDuration, 0);
+	}
+
+	if (DebugLevel >= 4)
+	{
+		for (const auto& Target : WarpTargetContainerInstance.Get<FGMCE_MotionWarpTargetContainer>().GetTargets())
+		{
+			DrawDebugSphere(GetWorld(), Target.GetLocation(), 8.f, 12, FColor::Yellow, false, DrawDebugDuration, 0, 1.f);
+		}
+	}
+#endif
+
+	LastRootTransform = FinalRootMotion;
+	LastDeltaTime = DeltaSeconds;
 
 	return FinalRootMotion;
 }

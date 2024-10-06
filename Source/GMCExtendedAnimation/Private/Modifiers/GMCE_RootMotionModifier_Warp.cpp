@@ -141,3 +141,33 @@ FQuat UGMCE_RootMotionModifier_Warp::WarpRotation(const FTransform& RootMotionDe
 	
 	return (DeltaOut * RootMotionDelta.GetRotation());
 }
+
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+void UGMCE_RootMotionModifier_Warp::PrintLog(const FString& Name, const FTransform& OriginalRootMotion, const FTransform& WarpedRootMotion) const
+{
+	if (const AGMC_Pawn* Pawn = GetPawnOwner())
+	{
+		UGMCE_OrganicMovementCmp* MovementCmp = Cast<UGMCE_OrganicMovementCmp>(Pawn->GetMovementComponent());
+		USkeletalMeshComponent* MeshCmp = Pawn->GetComponentByClass<USkeletalMeshComponent>();
+		
+		const float CapsuleHalfHeight = MovementCmp->GetRootCollisionHalfHeight(true);
+		const FVector CurrentLocation = (Pawn->GetActorLocation() - FVector(0.f, 0.f, CapsuleHalfHeight));
+		const FVector CurrentToTarget = (GetTargetLocation() - CurrentLocation).GetSafeNormal2D();
+		const FVector FutureLocation = CurrentLocation + (MeshCmp->ConvertLocalRootMotionToWorld(WarpedRootMotion)).GetTranslation();
+		const FRotator CurrentRotation = Pawn->GetActorRotation();
+		const FRotator FutureRotation = (WarpedRootMotion.GetRotation() * Pawn->GetActorQuat()).Rotator();
+		const float Dot = FVector::DotProduct(Pawn->GetActorForwardVector(), CurrentToTarget);
+		const float CurrentDist2D = FVector::Dist2D(GetTargetLocation(), CurrentLocation);
+		const float FutureDist2D = FVector::Dist2D(GetTargetLocation(), FutureLocation);
+		const float DeltaSeconds = Pawn->GetWorld()->GetDeltaSeconds();
+		const float Speed = WarpedRootMotion.GetTranslation().Size() / DeltaSeconds;
+		const float EndTimeOffset = CurrentPosition - EndTime;
+
+		UE_LOG(LogGMCExAnimation, Log, TEXT("%s NetMode: %d Char: %s Anim: %s Win: [%f %f][%f %f] DT: %f WT: %f ETOffset: %f Dist2D: %f Z: %f FDist2D: %f FZ: %f Dot: %f Delta: %s (%f) FDelta: %s (%f) Speed: %f Loc: %s FLoc: %s Rot: %s FRot: %s"),
+			*Name, (int32)Pawn->GetWorld()->GetNetMode(), *GetNameSafe(Pawn), *GetNameSafe(AnimationSequence.Get()), StartTime, EndTime, PreviousPosition, CurrentPosition, DeltaSeconds, Pawn->GetWorld()->GetTimeSeconds(), EndTimeOffset,
+			CurrentDist2D, (GetTargetLocation().Z - CurrentLocation.Z), FutureDist2D, (GetTargetLocation().Z - FutureLocation.Z), Dot,
+			*OriginalRootMotion.GetTranslation().ToString(), OriginalRootMotion.GetTranslation().Size(), *WarpedRootMotion.GetTranslation().ToString(), WarpedRootMotion.GetTranslation().Size(), Speed,
+			*CurrentLocation.ToString(), *FutureLocation.ToString(), *CurrentRotation.ToCompactString(), *FutureRotation.ToCompactString());
+	}
+}
+#endif

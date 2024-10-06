@@ -879,7 +879,7 @@ void UGMCE_OrganicMovementCmp::PreProcessRootMotion(const FGMC_AnimMontageInstan
 	{
 		InOutRootMotionParams.Set(ProcessRootMotionPreConvertToWorld.Execute(InOutRootMotionParams.GetRootMotionTransform(), this, DeltaSeconds));
 	}
-	
+
 	Super::PreProcessRootMotion(MontageInstance, InOutRootMotionParams, DeltaSeconds);
 }
 

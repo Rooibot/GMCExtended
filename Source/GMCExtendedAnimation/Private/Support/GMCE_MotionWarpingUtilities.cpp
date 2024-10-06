@@ -7,6 +7,13 @@
 #include "GMCE_MotionWarpingComponent.h"
 #include "GMCE_RootMotionModifier_Warp.h"
 
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+TAutoConsoleVariable<int32> FGMCE_MotionWarpCvars::CVarMotionWarpingDisable(TEXT("a.GMCEx.MotionWarp.Disable"), 0, TEXT("Disable Motion Warping"), ECVF_Cheat);
+TAutoConsoleVariable<int32> FGMCE_MotionWarpCvars::CVarMotionWarpingDebug(TEXT("a.GMCEx.MotionWarp.Debug"), 0, TEXT("0: Disable, 1: Only Log, 2: Only DrawDebug, 3: Log and DrawDebug"), ECVF_Cheat);
+TAutoConsoleVariable<float> FGMCE_MotionWarpCvars::CVarMotionWarpingDrawDebugDuration(TEXT("a.GMCEx.MotionWarp.DrawDebugLifeTime"), 1.f, TEXT("Time in seconds each draw debug persists.\nRequires 'a.MotionWarping.Debug 2'"), ECVF_Cheat);
+#endif
+
+
 void UGMCE_MotionWarpingUtilities::ExtractLocalSpacePose(const UAnimSequenceBase* Animation,
                                                          const FBoneContainer& BoneContainer, float Time, bool bExtractRootMotion, FCompactPose& OutPose)
 {

@@ -103,6 +103,7 @@ struct FGMCE_MotionWarpTargetContainer
 };
 
 
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGMCExPreMotionWarpingDelegate, class UGMCE_MotionWarpingComponent*, MotionWarpingComp);
 
 UCLASS(ClassGroup=(GMCExtended), meta=(BlueprintSpawnableComponent, DisplayName="GMCExtended Motion Warping Component"))
@@ -191,6 +192,9 @@ public:
 	
 	void BindToMovementComponent();
 
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Motion Warping")
+	void GetLastRootMotionStep(FTransform& OutDeltaTransform, float& OutDeltaTime);
+
 protected:
 
 	// We use BeginPlay rather than InitializeComponent so that we know we can pick up components if they were
@@ -224,11 +228,22 @@ protected:
 	UPROPERTY()
 	UAnimInstance* AnimInstance;
 
+	UPROPERTY()
+	FTransform LastRootTransform;
+
+	UPROPERTY()
+	float LastDeltaTime;
+	
 	void Update(float DeltaSeconds);
 	
 private:
 	void AddOrUpdateWarpTarget_Internal(FGMCE_MotionWarpTarget& Target);
 	void RemoveWarpTarget_Internal(FName TargetName);
 	void RemoveAllWarpTargets_Internal();
+
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	TOptional<FVector> OriginalRootMotionAccum;
+	TOptional<FVector> WarpedRootMotionAccum;
+#endif
 	
 };

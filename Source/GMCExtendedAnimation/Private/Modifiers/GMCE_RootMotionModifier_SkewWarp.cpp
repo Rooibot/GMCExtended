@@ -84,6 +84,22 @@ FTransform UGMCE_RootMotionModifier_SkewWarp::ProcessRootMotion(const FTransform
 		FinalRootMotion.SetRotation(WarpedRotation);
 	}
 
+	// Debug
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	const int32 DebugLevel = FGMCE_MotionWarpCvars::CVarMotionWarpingDebug.GetValueOnGameThread();
+	if (DebugLevel == 1 || DebugLevel == 3)
+	{
+		PrintLog(TEXT("GMCE_SkewWarp"), InRootMotion, FinalRootMotion);
+	}
+
+	if (DebugLevel >= 2)
+	{
+		const float DrawDebugDuration = FGMCE_MotionWarpCvars::CVarMotionWarpingDrawDebugDuration.GetValueOnGameThread();
+		DrawDebugCoordinateSystem(PawnOwner->GetWorld(), GetTargetLocation(), GetTargetRotator(), 50.f, false, DrawDebugDuration, 0, 1.f);
+	}
+#endif
+	
+
 	return FinalRootMotion;
 }
 

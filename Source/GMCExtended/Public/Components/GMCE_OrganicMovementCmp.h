@@ -551,6 +551,7 @@ public:
 	UFUNCTION(BlueprintPure, Category="Ragdoll")
 	bool RagdollActive() const { return bWantsRagdoll; }
 
+	UFUNCTION(BlueprintCallable, Category="Ragdoll")
 	virtual EGMC_MovementMode GetRagdollMode() const { return EGMC_MovementMode::Custom1; }
 
 	/// Can be overridden to provide a custom value for the initial linear velocity for a ragdoll. Will be called

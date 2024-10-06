@@ -7,6 +7,15 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GMCE_MotionWarpingUtilities.generated.h"
 
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+struct GMCEXTENDEDANIMATION_API FGMCE_MotionWarpCvars
+{
+	static TAutoConsoleVariable<int32> CVarMotionWarpingDisable;
+	static TAutoConsoleVariable<int32> CVarMotionWarpingDebug;
+	static TAutoConsoleVariable<float> CVarMotionWarpingDrawDebugDuration;
+};
+#endif
+
 /**
  * 
  */
