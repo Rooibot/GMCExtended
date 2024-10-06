@@ -24,18 +24,31 @@ void FGMCE_MovementSample::DrawDebug(const UWorld* World, const FTransform& From
 	}
 }
 
-void FGMCE_MovementSampleCollection::DrawDebug(const UWorld* World, const FTransform& FromOrigin, const FColor& PastColor,
-                                            const FColor& FutureColor, float LifeTime) const
+void FGMCE_MovementSampleCollection::DrawDebug(const UWorld* World, const FTransform& FromOrigin, const FColor& PastColor, const FColor& PresentColor, const FColor& FutureColor, int PastSamples, float LifeTime) const
 {
-	FLinearColor PastColorLinear = PastColor.ReinterpretAsLinear();
-	FLinearColor FutureColorLinear = FutureColor.ReinterpretAsLinear();
-
 	const int32 TotalCount = Samples.Num();
 	
 	for (int32 Idx = 0; Idx < TotalCount; Idx++)
 	{
-		const float LerpPoint = static_cast<float>(Idx) / static_cast<float>(TotalCount);
-		const FLinearColor TimelineColor = FLinearColor::LerpUsingHSV(PastColor, FutureColor, LerpPoint);
+		FLinearColor TimelineColor;
+		if (PastSamples > 0)
+		{
+			if (Idx < PastSamples)
+			{
+				const float LerpPoint = static_cast<float>(Idx) / static_cast<float>(PastSamples);
+				TimelineColor = FLinearColor::LerpUsingHSV(PastColor, PresentColor, LerpPoint);
+			}
+			else
+			{
+				const float LerpPoint = static_cast<float>(Idx - PastSamples) / static_cast<float>(TotalCount - PastSamples);
+				TimelineColor = FLinearColor::LerpUsingHSV(PresentColor, FutureColor, LerpPoint);			
+			}
+		}
+		else
+		{
+			const float LerpPoint = static_cast<float>(Idx) / static_cast<float>(TotalCount);
+			TimelineColor = FLinearColor::LerpUsingHSV(PastColor, FutureColor, LerpPoint);
+		}
 		
 		Samples[Idx].DrawDebug(World, FromOrigin, TimelineColor.ToFColor(true), LifeTime);	
 	}

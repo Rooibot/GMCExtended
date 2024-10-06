@@ -192,24 +192,26 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 
 	// Debug output
 #if ENABLE_DRAW_DEBUG || WITH_EDITORONLY_DATA
-	if (IsTrajectoryDebugEnabled() && !IsNetMode(NM_DedicatedServer) && (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne))
+	if (IsTrajectoryDebugEnabled() && !IsNetMode(NM_DedicatedServer))
 	{
+		bool bIsPredictiveMode = GetMovementMode() == EGMC_MovementMode::Airborne || GetMovementMode() == EGMC_MovementMode::Grounded;
+		
 		const FVector ActorLocation = GetActorLocation_GMC();
-		if (!bDrawTrajectoryOnly && (bTrajectoryIsStopping || (bDebugHadPreviousStop && GetLinearVelocity_GMC().IsZero())))
+		if (bIsPredictiveMode && !bDrawTrajectoryOnly && (bTrajectoryIsStopping || (bDebugHadPreviousStop && GetLinearVelocity_GMC().IsZero())))
 		{
 			if (bTrajectoryIsStopping) DebugPreviousStop = ActorLocation + PredictedStopPoint;
 			DrawDebugSphere(GetWorld(), DebugPreviousStop, 24.f, 12, bTrajectoryIsStopping ? FColor::Blue : FColor::Black, false, bTrajectoryIsStopping ? -1 : 1.f, 0, bTrajectoryIsStopping ? 1.f: 2.f);
 			bDebugHadPreviousStop = bTrajectoryIsStopping;
 		}
 		
-		if (!bDrawTrajectoryOnly && (bTrajectoryIsPivoting || (bDebugHadPreviousPivot && !DoInputAndVelocityDiffer())))
+		if (bIsPredictiveMode && !bDrawTrajectoryOnly && (bTrajectoryIsPivoting || (bDebugHadPreviousPivot && !DoInputAndVelocityDiffer())))
 		{
 			if (bTrajectoryIsPivoting) DebugPreviousPivot = ActorLocation + PredictedPivotPoint;
 			DrawDebugSphere(GetWorld(), DebugPreviousPivot, 24.f, 12, bTrajectoryIsPivoting ? FColor::Yellow : FColor::White, false, bTrajectoryIsPivoting ? -1 : 2.f, 0, bTrajectoryIsPivoting ? 1.f : 2.f);
 			bDebugHadPreviousPivot = bTrajectoryIsPivoting;
 		}
 
-		if (!bDrawTrajectoryOnly && DoInputAndVelocityDiffer())
+		if (bIsPredictiveMode && !bDrawTrajectoryOnly && DoInputAndVelocityDiffer())
 		{
 			const FVector LinearVelocityDirection = GetLinearVelocity_GMC().GetSafeNormal();
 			const FVector AccelerationDirection = UKismetMathLibrary::RotateAngleAxis(LinearVelocityDirection, InputVelocityOffsetAngle(), FVector(0.f, 0.f, 1.f));
@@ -227,7 +229,16 @@ void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickTyp
 			{
 				OriginTransform = UpdatedComponent->GetComponentTransform();
 			}
-			PredictedTrajectory.DrawDebug(GetWorld(), OriginTransform, FColor::Blue, FColor::Red, DebugPredictionLifeTime);
+
+			int PastSamples = MovementSamples.Num();
+			if (bIsPredictiveMode)
+			{
+				PredictedTrajectory.DrawDebug(GetWorld(), OriginTransform, FColor::Blue, FColor::Green, FColor::Red, PastSamples, DebugPredictionLifeTime);
+			}
+			else
+			{
+				GetMovementHistory(false).DrawDebug(GetWorld(), OriginTransform, FColor::Blue, FColor::Green, FColor::Red, PastSamples, DebugPredictionLifeTime);
+			}
 		}
 	}
 #endif
@@ -935,6 +946,12 @@ bool UGMCE_OrganicMovementCmp::IsInputPresent(bool bAllowGrace) const
 
 void UGMCE_OrganicMovementCmp::UpdateAllPredictions(float DeltaTime)
 {
+	if (bTrajectoryEnabled)
+	{
+		// We track trajectory regardless of movement mode.
+		UpdateMovementSamples();
+	}
+	
 	if (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne)
 	{
 		if (GetMovementMode() == EGMC_MovementMode::Grounded)
@@ -947,13 +964,10 @@ void UGMCE_OrganicMovementCmp::UpdateAllPredictions(float DeltaTime)
 			}
 		}
 
-		if (bTrajectoryEnabled)
+		if (bTrajectoryEnabled && bPrecalculateFutureTrajectory)
 		{
-			UpdateMovementSamples();
-			if (bPrecalculateFutureTrajectory)
-			{
-				UpdateTrajectoryPrediction();
-			}
+			// But we only predict trajectory when we're grounded or in airborne mode.
+			UpdateTrajectoryPrediction();
 		}
 	}
 }

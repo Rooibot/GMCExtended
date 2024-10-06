@@ -247,7 +247,7 @@ struct GMCEXTENDED_API FGMCE_MovementSampleCollection
 	TArray<FGMCE_MovementSample> Samples;
 
 	void DrawDebug(const UWorld* World, const FTransform& FromOrigin, const FColor& PastColor = FColor::Blue,
-		const FColor& FutureColor = FColor::Red, float LifeTime = -1.f) const;
+		const FColor& PresentColor = FColor::Purple, const FColor& FutureColor = FColor::Red, int NumPastSamples = -1, float LifeTime = -1.f) const;
 
 	FGMCE_MovementSample GetSampleAtTime(const float Time, bool bExtrapolate) const
 	{

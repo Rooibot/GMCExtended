@@ -18,9 +18,6 @@ void UGMCE_BaseSolver::InitializeSolver()
 {
 	if (bUseBlueprintEvents) BlueprintInitializeSolver();
 	NativeInitializeSolver();
-
-	MontageDelegate_OnStart.BindUObject(this, &UGMCE_BaseSolver::OnMontageStart);
-	MontageDelegate_OnComplete.BindUObject(this, &UGMCE_BaseSolver::OnMontageComplete);
 }
 
 bool UGMCE_BaseSolver::RunSolver(FSolverState& State, float DeltaTime)
@@ -396,26 +393,69 @@ bool UGMCE_BaseSolver::CapsuleTraceMultiByProfile(const FVector Start, const FVe
 		bTraceComplex, ActorsToIgnore, DrawDebugType, OutHits, bIgnoreSelf, TraceColor, TraceHitColor, DrawTime);
 }
 
-bool UGMCE_BaseSolver::PlayMontageBlocking(USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage,
+int UGMCE_BaseSolver::PlayMontageBlocking(USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage,
 	float StartPosition, float PlayRate)
 {
-	if (MovementComponent->PlayMontage_Blocking(SkeletalMeshComponent, MovementComponent->MontageTracker,
-		Montage, StartPosition, PlayRate, true, false, true,
-		false, EMontagePlayReturnType::MontageLength) == 0.f)
+	UGMCE_SolverMontageWrapper* Wrapper = UGMCE_SolverMontageWrapper::PlayMontageBlocking(this,
+		SkeletalMeshComponent, Montage, StartPosition, PlayRate);
+
+	if (!Wrapper) return -1;
+
+	MontageWrappers.Add(Wrapper);
+	return Wrapper->WrapperHandle;
+}
+
+void UGMCE_BaseSolver::RemoveMontageWrapper(UGMCE_SolverMontageWrapper* Wrapper)
+{
+	MontageWrappers.Remove(Wrapper);
+}
+
+void UGMCE_BaseSolver::OnMontageBlendInDone_Implementation(int MontageHandle, bool bIsCosmeticOnly)
+{
+}
+
+void UGMCE_BaseSolver::OnMontageBlendOutStarted_Implementation(int MontageHandle, bool bIsCosmeticOnly)
+{
+}
+
+void UGMCE_BaseSolver::OnMontageStart_Implementation(int MontageHandle, bool bIsCosmeticOnly)
+{
+}
+
+void UGMCE_BaseSolver::OnMontageComplete_Implementation(int MontageHandle, bool bIsCosmeticOnly)
+{
+}
+
+void UGMCE_BaseSolver::OnMontageInterrupted_Implementation(int MontageHandle, bool bIsCosmeticOnly)
+{
+}
+
+
+bool UGMCE_SolverMontageWrapper::PlayMontage(USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage,
+	float StartPosition, float PlayRate)
+{
+	if (!IsValid(Solver) || !IsValid(SkeletalMeshComponent) || !IsValid(Montage)) return false;
+	
+	UGMCE_OrganicMovementCmp *MovementCmp = Solver->GetMovementComponent();
+	if (!IsValid(MovementCmp)) return false;
+
+	UAnimInstance* AnimInstance = SkeletalMeshComponent->GetAnimInstance();
+	if (!IsValid(AnimInstance)) return false;		
+	
+	if (MovementCmp->PlayMontage_Blocking(SkeletalMeshComponent, MovementCmp->MontageTracker,
+		Montage, StartPosition, PlayRate) == 0.f)
 	{
 		return false;
 	}
-	MovementComponent->SetMontageStartDelegate(MontageDelegate_OnStart, MovementComponent->MontageTracker);
-	MovementComponent->SetMontageCompleteDelegate(MontageDelegate_OnComplete, MovementComponent->MontageTracker);
-	MovementComponent->SetMontageBlendOutDelegate(MontageDelegate_OnComplete, MovementComponent->MontageTracker);
+	
+	MovementCmp->SetMontageStartDelegate(Delegate_OnMontageStart, MovementCmp->MontageTracker);
+	MovementCmp->SetMontageBlendInDelegate(Delegate_OnMontageBlendInComplete, MovementCmp->MontageTracker);
+	MovementCmp->SetMontageBlendOutDelegate(Delegate_OnMontageBlendOutBegin, MovementCmp->MontageTracker);
+	MovementCmp->SetMontageCompleteDelegate(Delegate_OnMontageComplete, MovementCmp->MontageTracker);
+
+	AnimInstance->Montage_SetBlendedInDelegate(Delegate_OnMontageBlendedInEnded_Cosmetic, Montage);
+	AnimInstance->Montage_SetBlendingOutDelegate(Delegate_OnMontageBlendingOutStarted_Cosmetic, Montage);
+	AnimInstance->Montage_SetEndDelegate(Delegate_OnMontageEnded_Cosmetic, Montage);
+
 	return true;
 }
-
-void UGMCE_BaseSolver::OnMontageStart_Implementation()
-{
-}
-
-void UGMCE_BaseSolver::OnMontageComplete_Implementation()
-{
-}
-
