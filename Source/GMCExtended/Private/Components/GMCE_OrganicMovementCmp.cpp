@@ -370,20 +370,19 @@ void UGMCE_OrganicMovementCmp::BindReplicationData_Implementation()
 		EGMC_InterpolationFunction::TargetValue
 	);
 
-	// BI_TurnInPlaceStartDirection = BindCompressedVector(
-	// 	TurnInPlaceStartDirection,
-	// 	EGMC_PredictionMode::ClientAuth_Input,
-	// 	EGMC_CombineMode::CombineIfUnchanged,
-	// 	EGMC_SimulationMode::PeriodicAndOnChange_Output,
-	// 	EGMC_InterpolationFunction::TargetValue
-	// );
-
 	BI_TurnToDirection = BindCompressedVector(
 		TurnToDirection,
 		EGMC_PredictionMode::ServerAuth_Output_ClientValidated,
 		EGMC_CombineMode::CombineIfUnchanged,
 		EGMC_SimulationMode::PeriodicAndOnChange_Output,
 		EGMC_InterpolationFunction::TargetValue
+	);
+
+	BI_PreviousMontagePosition = BindSinglePrecisionFloat(PreviousMontagePosition,
+		MontageReplication.MontagePrediction.MontagePositionPredictionMode,
+		MontageReplication.MontagePrediction.MontagePositionCombineMode,
+		MontageReplication.MontageSimulation.bReplicateMontagePosition ? EGMC_SimulationMode::Periodic_Output : EGMC_SimulationMode::None,
+		MontageReplication.MontageSimulation.MontagePositionInterpolation
 	);
 
 	if (OnBindReplicationData.IsBound())
@@ -867,17 +866,19 @@ void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
 	Super::ApplyRotation(bIsDirectBotMove, RootMotionMetaData, DeltaSeconds);
 }
 
-FVector UGMCE_OrganicMovementCmp::PostProcessAnimRootMotionVelocity_Implementation(const FVector& RootMotionVelocity,
-	float DeltaSeconds)
+void UGMCE_OrganicMovementCmp::MontageUpdate(float DeltaSeconds)
 {
-	if (GetMovementMode() == GetSolverMovementMode())
-	{
-		SetLinearVelocity_GMC(RootMotionVelocity);
-		return RootMotionVelocity;
-	}
-	
-	return Super::PostProcessAnimRootMotionVelocity_Implementation(RootMotionVelocity, DeltaSeconds);
+	PreviousMontagePosition = MontageTracker.MontagePosition;
+	Super::MontageUpdate(DeltaSeconds);
 }
+
+void UGMCE_OrganicMovementCmp::OnMontageStarted(UAnimMontage* Montage, float Position, float PlayRate,
+                                                bool bInterrupted, float DeltaSeconds)
+{
+	PreviousMontagePosition = Position;
+	Super::OnMontageStarted(Montage, Position, PlayRate, bInterrupted, DeltaSeconds);
+}
+
 #pragma endregion 
 
 #pragma region Animation Support
@@ -958,13 +959,14 @@ bool UGMCE_OrganicMovementCmp::IsInputPresent(bool bAllowGrace) const
 
 void UGMCE_OrganicMovementCmp::UpdateAllPredictions(float DeltaTime)
 {
+	if (bTrajectoryEnabled)
+	{
+		// Track trajectory even when we're in custom movement modes.
+		UpdateMovementSamples();
+	}
+	
 	if (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne)
 	{
-		if (bTrajectoryEnabled)
-		{
-			UpdateMovementSamples();
-		}
-	
 		if (GetMovementMode() == EGMC_MovementMode::Grounded)
 		{
 			if (bPrecalculateDistanceMatches)
@@ -977,7 +979,7 @@ void UGMCE_OrganicMovementCmp::UpdateAllPredictions(float DeltaTime)
 
 		if (bTrajectoryEnabled && bPrecalculateFutureTrajectory)
 		{
-			// But we only predict trajectory when we're grounded or in airborne mode.
+			// Only predict trajectory when we're grounded or in airborne mode.
 			UpdateTrajectoryPrediction();
 		}
 	}
@@ -1317,7 +1319,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 				if (Hit.bBlockingHit && (FMath::Abs(Hit.Location.Z - CurrentLocation.Z) > 2.f))
 				{
 					CurrentLocation = Hit.Location;
-					CurrentVelocity.Z = (CurrentLocation.Z - PreviousLocation.Z) / TimePerSample;
+					// CurrentVelocity.Z = (CurrentLocation.Z - PreviousLocation.Z) / TimePerSample;
 				}
 
 				if (EffectiveMovementMode == EGMC_MovementMode::Grounded && !Hit.bBlockingHit)

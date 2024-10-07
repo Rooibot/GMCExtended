@@ -147,7 +147,7 @@ void UGMCE_MotionWarpingComponent::Update(float DeltaSeconds)
 		if (FGMCE_MotionWarpCvars::CVarMotionWarpingFromTracker.GetValueOnGameThread())
 		{
 			Context.CurrentPosition = Tracker.MontagePosition;
-			Context.PreviousPosition = Tracker.MontagePreviousPosition;
+			Context.PreviousPosition = Component->PreviousMontagePosition;
 			Context.PlayRate = Tracker.MontagePlayRate;
 		}
 		else
