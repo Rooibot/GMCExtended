@@ -284,7 +284,7 @@ public:
 
 	/// If true, velocity differs enough from input acceleration that we're likely to pivot.
 	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
-	bool DoInputAndVelocityDiffer() const { return FMath::Abs(InputVelocityOffset) > 90.f; }
+	bool DoInputAndVelocityDiffer() const { return FMath::Abs(InputVelocityOffset) > PivotPredictionAngleThreshold; }
 
 	/// The angle, in degrees, that velocity differs from provided input (on the XY plane).
 	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
