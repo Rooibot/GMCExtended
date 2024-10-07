@@ -676,7 +676,20 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 		else
 		{
 			// No valid solver available. Bail.
-			SetMovementMode(EGMC_MovementMode::Airborne);
+
+			FHitResult HitCheck;
+			GetWorld()->LineTraceSingleByChannel(HitCheck, UpdatedComponent->GetComponentLocation(),
+			                                     UpdatedComponent->GetComponentLocation() - FVector(0.f, 0.f, 1000.f),
+			                                     ECC_Visibility, FCollisionQueryParams(NAME_None, true, GetOwner()));
+			if (HitCheck.bBlockingHit)
+			{
+				SetMovementMode(EGMC_MovementMode::Grounded);
+			}
+			else
+			{
+				SetMovementMode(EGMC_MovementMode::Airborne);
+			}
+			
 		}
 		return;
 	}
@@ -866,6 +879,18 @@ void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
 	// Otherwise just let GMC handle it as normal.
 	Super::ApplyRotation(bIsDirectBotMove, RootMotionMetaData, DeltaSeconds);
 }
+
+FVector UGMCE_OrganicMovementCmp::PostProcessAnimRootMotionVelocity_Implementation(const FVector& RootMotionVelocity,
+	float DeltaSeconds)
+{
+	if (GetMovementMode() == GetSolverMovementMode())
+	{
+		SetLinearVelocity_GMC(RootMotionVelocity);
+		return RootMotionVelocity;
+	}
+	
+	return Super::PostProcessAnimRootMotionVelocity_Implementation(RootMotionVelocity, DeltaSeconds);
+}
 #pragma endregion 
 
 #pragma region Animation Support
@@ -946,14 +971,13 @@ bool UGMCE_OrganicMovementCmp::IsInputPresent(bool bAllowGrace) const
 
 void UGMCE_OrganicMovementCmp::UpdateAllPredictions(float DeltaTime)
 {
-	if (bTrajectoryEnabled)
-	{
-		// We track trajectory regardless of movement mode.
-		UpdateMovementSamples();
-	}
-	
 	if (GetMovementMode() == EGMC_MovementMode::Grounded || GetMovementMode() == EGMC_MovementMode::Airborne)
 	{
+		if (bTrajectoryEnabled)
+		{
+			UpdateMovementSamples();
+		}
+	
 		if (GetMovementMode() == EGMC_MovementMode::Grounded)
 		{
 			if (bPrecalculateDistanceMatches)

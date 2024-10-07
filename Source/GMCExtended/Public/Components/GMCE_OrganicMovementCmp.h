@@ -95,6 +95,8 @@ public:
 
 	virtual void ApplyRotation(bool bIsDirectBotMove, const FGMC_RootMotionVelocitySettings& RootMotionMetaData, float DeltaSeconds) override;
 
+	virtual FVector PostProcessAnimRootMotionVelocity_Implementation(const FVector& RootMotionVelocity, float DeltaSeconds) override;
+
 	// General functionality
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Operation")
