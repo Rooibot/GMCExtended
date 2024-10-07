@@ -636,6 +636,8 @@ public:
 
 	virtual void OnSolverChangedMode(FGameplayTag NewMode, FGameplayTag OldMode) {};
 
+	void LeaveSolverMode();
+
 protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Solvers")

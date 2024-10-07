@@ -508,7 +508,7 @@ bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_Flo
 	// If we disable solver mode, we revert to airborne to allow GMC to sort things out itself.
 	if (GetMovementMode() == GetSolverMovementMode())
 	{
-		SetMovementMode(EGMC_MovementMode::Airborne);
+		LeaveSolverMode();
 	}
 	
 	return Super::UpdateMovementModeDynamic_Implementation(Floor, DeltaSeconds);
@@ -676,20 +676,7 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 		else
 		{
 			// No valid solver available. Bail.
-
-			FHitResult HitCheck;
-			GetWorld()->LineTraceSingleByChannel(HitCheck, UpdatedComponent->GetComponentLocation(),
-			                                     UpdatedComponent->GetComponentLocation() - FVector(0.f, 0.f, 1000.f),
-			                                     ECC_Visibility, FCollisionQueryParams(NAME_None, true, GetOwner()));
-			if (HitCheck.bBlockingHit)
-			{
-				SetMovementMode(EGMC_MovementMode::Grounded);
-			}
-			else
-			{
-				SetMovementMode(EGMC_MovementMode::Airborne);
-			}
-			
+			LeaveSolverMode();
 		}
 		return;
 	}
@@ -1748,6 +1735,25 @@ FSolverState UGMCE_OrganicMovementCmp::GetSolverState() const
 	State.AvailableSolvers = AvailableSolvers;
 
 	return State;	
+}
+
+void UGMCE_OrganicMovementCmp::LeaveSolverMode()
+{
+	FHitResult HitCheck;
+	FCollisionQueryParams CollisionQueryParams(NAME_None, false, GetOwner());
+	CollisionQueryParams.AddIgnoredActors(UpdatedPrimitive->GetMoveIgnoreActors());
+	CollisionQueryParams.AddIgnoredComponents(UpdatedPrimitive->GetMoveIgnoreComponents());
+	GetWorld()->LineTraceSingleByChannel(HitCheck, GetLowerBound() + FVector(0.f, 0.f, MaxStepUpHeight),
+										 GetLowerBound() - FVector(0.f, 0.f, MaxStepDownHeight),
+										 ECC_Pawn, FCollisionQueryParams(NAME_None, true, GetOwner()));
+	if (HitWalkableFloor(HitCheck))
+	{
+		SetMovementMode(EGMC_MovementMode::Grounded);
+	}
+	else
+	{
+		SetMovementMode(EGMC_MovementMode::Airborne);
+	}
 }
 
 
