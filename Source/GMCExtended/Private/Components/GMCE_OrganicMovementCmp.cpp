@@ -370,20 +370,19 @@ void UGMCE_OrganicMovementCmp::BindReplicationData_Implementation()
 		EGMC_InterpolationFunction::TargetValue
 	);
 
-	// BI_TurnInPlaceStartDirection = BindCompressedVector(
-	// 	TurnInPlaceStartDirection,
-	// 	EGMC_PredictionMode::ClientAuth_Input,
-	// 	EGMC_CombineMode::CombineIfUnchanged,
-	// 	EGMC_SimulationMode::PeriodicAndOnChange_Output,
-	// 	EGMC_InterpolationFunction::TargetValue
-	// );
-
 	BI_TurnToDirection = BindCompressedVector(
 		TurnToDirection,
 		EGMC_PredictionMode::ServerAuth_Output_ClientValidated,
 		EGMC_CombineMode::CombineIfUnchanged,
 		EGMC_SimulationMode::PeriodicAndOnChange_Output,
 		EGMC_InterpolationFunction::TargetValue
+	);
+
+	BI_PreviousMontagePosition = BindSinglePrecisionFloat(PreviousMontagePosition,
+		MontageReplication.MontagePrediction.MontagePositionPredictionMode,
+		MontageReplication.MontagePrediction.MontagePositionCombineMode,
+		MontageReplication.MontageSimulation.bReplicateMontagePosition ? EGMC_SimulationMode::Periodic_Output : EGMC_SimulationMode::None,
+		MontageReplication.MontageSimulation.MontagePositionInterpolation
 	);
 
 	if (OnBindReplicationData.IsBound())
@@ -508,7 +507,7 @@ bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_Flo
 	// If we disable solver mode, we revert to airborne to allow GMC to sort things out itself.
 	if (GetMovementMode() == GetSolverMovementMode())
 	{
-		SetMovementMode(EGMC_MovementMode::Airborne);
+		LeaveSolverMode();
 	}
 	
 	return Super::UpdateMovementModeDynamic_Implementation(Floor, DeltaSeconds);
@@ -676,7 +675,7 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 		else
 		{
 			// No valid solver available. Bail.
-			SetMovementMode(EGMC_MovementMode::Airborne);
+			LeaveSolverMode();
 		}
 		return;
 	}
@@ -866,6 +865,20 @@ void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
 	// Otherwise just let GMC handle it as normal.
 	Super::ApplyRotation(bIsDirectBotMove, RootMotionMetaData, DeltaSeconds);
 }
+
+void UGMCE_OrganicMovementCmp::MontageUpdate(float DeltaSeconds)
+{
+	PreviousMontagePosition = MontageTracker.MontagePosition;
+	Super::MontageUpdate(DeltaSeconds);
+}
+
+void UGMCE_OrganicMovementCmp::OnMontageStarted(UAnimMontage* Montage, float Position, float PlayRate,
+                                                bool bInterrupted, float DeltaSeconds)
+{
+	PreviousMontagePosition = Position;
+	Super::OnMontageStarted(Montage, Position, PlayRate, bInterrupted, DeltaSeconds);
+}
+
 #pragma endregion 
 
 #pragma region Animation Support
@@ -948,7 +961,7 @@ void UGMCE_OrganicMovementCmp::UpdateAllPredictions(float DeltaTime)
 {
 	if (bTrajectoryEnabled)
 	{
-		// We track trajectory regardless of movement mode.
+		// Track trajectory even when we're in custom movement modes.
 		UpdateMovementSamples();
 	}
 	
@@ -966,7 +979,7 @@ void UGMCE_OrganicMovementCmp::UpdateAllPredictions(float DeltaTime)
 
 		if (bTrajectoryEnabled && bPrecalculateFutureTrajectory)
 		{
-			// But we only predict trajectory when we're grounded or in airborne mode.
+			// Only predict trajectory when we're grounded or in airborne mode.
 			UpdateTrajectoryPrediction();
 		}
 	}
@@ -1306,7 +1319,7 @@ FGMCE_MovementSampleCollection UGMCE_OrganicMovementCmp::PredictMovementFuture(c
 				if (Hit.bBlockingHit && (FMath::Abs(Hit.Location.Z - CurrentLocation.Z) > 2.f))
 				{
 					CurrentLocation = Hit.Location;
-					CurrentVelocity.Z = (CurrentLocation.Z - PreviousLocation.Z) / TimePerSample;
+					// CurrentVelocity.Z = (CurrentLocation.Z - PreviousLocation.Z) / TimePerSample;
 				}
 
 				if (EffectiveMovementMode == EGMC_MovementMode::Grounded && !Hit.bBlockingHit)
@@ -1724,6 +1737,25 @@ FSolverState UGMCE_OrganicMovementCmp::GetSolverState() const
 	State.AvailableSolvers = AvailableSolvers;
 
 	return State;	
+}
+
+void UGMCE_OrganicMovementCmp::LeaveSolverMode()
+{
+	FHitResult HitCheck;
+	FCollisionQueryParams CollisionQueryParams(NAME_None, false, GetOwner());
+	CollisionQueryParams.AddIgnoredActors(UpdatedPrimitive->GetMoveIgnoreActors());
+	CollisionQueryParams.AddIgnoredComponents(UpdatedPrimitive->GetMoveIgnoreComponents());
+	GetWorld()->LineTraceSingleByChannel(HitCheck, GetLowerBound() + FVector(0.f, 0.f, MaxStepUpHeight),
+										 GetLowerBound() - FVector(0.f, 0.f, MaxStepDownHeight),
+										 ECC_Pawn, FCollisionQueryParams(NAME_None, true, GetOwner()));
+	if (HitWalkableFloor(HitCheck))
+	{
+		SetMovementMode(EGMC_MovementMode::Grounded);
+	}
+	else
+	{
+		SetMovementMode(EGMC_MovementMode::Airborne);
+	}
 }
 
 

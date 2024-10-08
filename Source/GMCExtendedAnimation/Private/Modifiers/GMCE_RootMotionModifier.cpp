@@ -91,17 +91,10 @@ void UGMCE_RootMotionModifier::Update(const FGMCE_MotionWarpContext& Context)
 		const float ExpectedDelta = Context.DeltaSeconds * Context.PlayRate;
 		const float ActualDelta = CurrentPosition - PreviousPosition;
 
-		// Unreal is non deterministic and some tiny degree of deviation from our expected delta is likely at various times.
-		// If the deviation isn't tiny, however, we've been repositioned outside of the playback window by someone manually
-		// setting a time on the playback. If that happens while we were in a modifier window, the modifier is by definition
-		// no longer usable as the state is going to be what I believe in technical terms is referred to as "Wonkers."
-		//
-		// This only applies to modifiers whose window we were IN when the animation was repositioned; modifiers yet to come
-		// in the animation can still be used.
-		if (!FMath::IsNearlyZero(FMath::Abs(ActualDelta - ExpectedDelta), KINDA_SMALL_NUMBER))
+		if (!FMath::IsNearlyZero(FMath::Abs(ActualDelta - ExpectedDelta), UE_KINDA_SMALL_NUMBER))
 		{
-			UE_LOG(LogGMCExAnimation, Verbose, TEXT("Motion Warping: marking modifier for removal as playback has been shifted outside the window. %s: %s expected delta %f received %f"),
-				*GetNameSafe(GetPawnOwner()), *GetNameSafe(AnimationSequence.Get()), ExpectedDelta, ActualDelta);
+			UE_LOG(LogGMCExAnimation, Verbose, TEXT("Motion Warping: marking modifier for removal as playback has been shifted outside the window. %s: %s expected delta %f received %f (play rate = %f)"),
+				*GetNameSafe(GetPawnOwner()), *GetNameSafe(AnimationSequence.Get()), ExpectedDelta, ActualDelta, Context.PlayRate);
 
 			SetState(EGMCE_RootMotionModifierState::MarkedForRemoval);
 			return;
@@ -133,4 +126,9 @@ FString UGMCE_RootMotionModifier::ToString() const
 	return FString::Printf(TEXT("%s: %s in %s Time [%f %f] Pos [%f %f]"),
 		*GetNameSafe(GetPawnOwner()), *GetNameSafe(StaticClass()), *GetNameSafe(AnimationSequence.Get()),
 		StartTime, EndTime, PreviousPosition, CurrentPosition);
+}
+
+bool UGMCE_RootMotionModifier::IsPositionWithinWindow(const float Position) const
+{
+	return (Position >= StartTime && Position <= EndTime);
 }

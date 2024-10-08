@@ -108,6 +108,8 @@ public:
 	FORCEINLINE const UAnimSequenceBase* GetAnimation() const { return AnimationSequence.Get(); }
 
 	FString ToString() const;
+
+	bool IsPositionWithinWindow(const float Position) const;
 	
 private:
 

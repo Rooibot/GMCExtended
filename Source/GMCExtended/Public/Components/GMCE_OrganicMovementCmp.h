@@ -95,6 +95,9 @@ public:
 
 	virtual void ApplyRotation(bool bIsDirectBotMove, const FGMC_RootMotionVelocitySettings& RootMotionMetaData, float DeltaSeconds) override;
 
+	virtual void MontageUpdate(float DeltaSeconds) override;
+	virtual void OnMontageStarted(UAnimMontage* Montage, float Position, float PlayRate, bool bInterrupted, float DeltaSeconds) override;
+
 	// General functionality
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Operation")
@@ -237,6 +240,10 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	FVector LastLandingVelocity { 0.f };
 
+	// When a montage is playing, what our previous montage position was. Used for motion warping.
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
+	float PreviousMontagePosition { 0.f };
+
 protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	FRotator CurrentAimRotation { FRotator::ZeroRotator };
@@ -271,6 +278,8 @@ protected:
 	FVector LastAnimationVelocity { 0.f };
 
 	int32 BI_LastLandingVelocity { -1 };
+	int32 BI_PreviousMontagePosition { -1 };
+	
 
 #pragma endregion
 	
@@ -633,6 +642,8 @@ public:
 	FSolverState GetSolverState() const;
 
 	virtual void OnSolverChangedMode(FGameplayTag NewMode, FGameplayTag OldMode) {};
+
+	void LeaveSolverMode();
 
 protected:
 

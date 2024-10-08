@@ -11,6 +11,7 @@
 struct GMCEXTENDEDANIMATION_API FGMCE_MotionWarpCvars
 {
 	static TAutoConsoleVariable<int32> CVarMotionWarpingDisable;
+	static TAutoConsoleVariable<int32> CVarMotionWarpingFromTracker;
 	static TAutoConsoleVariable<int32> CVarMotionWarpingDebug;
 	static TAutoConsoleVariable<float> CVarMotionWarpingDrawDebugDuration;
 };
