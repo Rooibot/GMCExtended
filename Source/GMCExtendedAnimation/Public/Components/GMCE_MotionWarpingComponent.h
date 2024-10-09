@@ -193,7 +193,7 @@ public:
 	void BindToMovementComponent();
 
 	UFUNCTION(BlueprintCallable, Category="GMC Extended|Motion Warping")
-	void GetLastRootMotionStep(FTransform& OutDeltaTransform, float& OutDeltaTime);
+	void GetLastRootMotionStep(FTransform& OutDeltaTransform, float& OutDeltaTime, bool bConsume = true);
 
 protected:
 

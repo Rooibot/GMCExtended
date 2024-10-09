@@ -412,7 +412,7 @@ FVector UGMCE_OrganicMovementCmp::PreProcessInputVector_Implementation(FVector I
 void UGMCE_OrganicMovementCmp::PreMovementUpdate_Implementation(float DeltaSeconds)
 {
 	Super::PreMovementUpdate_Implementation(DeltaSeconds);
-
+	
 	RunSolvers(DeltaSeconds);	
 }
 
@@ -661,13 +661,20 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 				// and mantling.
 				if (const FGameplayTag& NewSolverTag = Solver->GetPreferredSolverTag(); NewSolverTag != CurrentActiveSolverTag)
 				{
+					UE_LOG(LogGMCExtended, Verbose, TEXT("[%s] %s: changed active movement tag from %s to %s"),
+						*GetComponentDescription(), *Solver->GetName(), *CurrentActiveSolverTag.ToString(), *NewSolverTag.ToString())
+					
 					// Solver is changing into some different sub-mode.
 					OnSolverChangedMode(NewSolverTag, CurrentActiveSolverTag);
 					CurrentActiveSolverTag = NewSolverTag;
+					Solver->ActivateSolver(NewSolverTag);
 				}
 			}
 			else
 			{
+				UE_LOG(LogGMCExtended, Verbose, TEXT("[%s] %s: surrendered control of movement"),
+					*GetComponentDescription(), *Solver->GetName())
+				
 				OnSolverChangedMode(FGameplayTag::EmptyTag, CurrentActiveSolverTag);
 				CurrentActiveSolverTag = FGameplayTag::EmptyTag;
 			}
@@ -679,7 +686,6 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 		}
 		return;
 	}
-	
 	
 	Super::PhysicsCustom_Implementation(DeltaSeconds);
 }
@@ -877,6 +883,27 @@ void UGMCE_OrganicMovementCmp::OnMontageStarted(UAnimMontage* Montage, float Pos
 {
 	PreviousMontagePosition = Position;
 	Super::OnMontageStarted(Montage, Position, PlayRate, bInterrupted, DeltaSeconds);
+}
+
+FString UGMCE_OrganicMovementCmp::GetComponentDescription()
+{
+	if (ComponentLogDescriptionString.Len() > 0)
+	{
+		return ComponentLogDescriptionString;
+	}
+	
+	FString RoleString = GetNetRoleAsString(GetOwnerRole());
+	if (IsRemotelyControlledServerPawn())
+	{
+		RoleString = FString(TEXT("remote ")) + RoleString;
+	}
+	else if (IsLocallyControlledServerPawn())
+	{
+		RoleString = FString(TEXT("local ")) + RoleString;
+	}
+
+	ComponentLogDescriptionString = RoleString;
+	return RoleString;
 }
 
 #pragma endregion 
@@ -1635,10 +1662,7 @@ void UGMCE_OrganicMovementCmp::RunSolvers(float DeltaTime)
 	
 	for (const auto& Solver : Solvers)
 	{
-		if (Solver->RunSolver(State, DeltaTime))
-		{
-			
-		}
+		Solver->RunSolver(State, DeltaTime);
 	}
 
 	AvailableSolvers = State.AvailableSolvers;	
@@ -1713,9 +1737,13 @@ bool UGMCE_OrganicMovementCmp::TryActivateSolver(const FGameplayTag& SolverTag)
 		{
 			if (SolverTag.MatchesTag(Solver->GetTag()))
 			{
+				UE_LOG(LogGMCExtended, Verbose, TEXT("[%s] %s: trying to activate solver"),
+					*GetComponentDescription(), *Solver->GetName())
+				
 				FGameplayTag OldMode = CurrentActiveSolverTag;
 				CurrentActiveSolverTag = Solver->GetPreferredSolverTag();
 				OnSolverChangedMode(CurrentActiveSolverTag, OldMode);
+				Solver->ActivateSolver(CurrentActiveSolverTag);
 				return true;
 			}
 		}
@@ -1797,6 +1825,7 @@ bool UGMCE_OrganicMovementCmp::ShouldTurnInPlace() const
 
 void UGMCE_OrganicMovementCmp::CalculateTurnInPlace(float DeltaSeconds)
 {
+	// We want the visual values for this, as this is used for animation.
 	SV_SwapServerState();
 	const FVector ControllerForward = UKismetMathLibrary::Conv_RotatorToVector(GetControllerRotation_GMC());
 	const float ControllerAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(ControllerForward, UpdatedComponent->GetForwardVector()));

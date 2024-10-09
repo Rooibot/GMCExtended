@@ -4,6 +4,8 @@
 #include "Solvers/GMCE_BaseSolver.h"
 #include "GMCE_OrganicMovementCmp.h"
 
+DEFINE_LOG_CATEGORY(LogGMCExtendedSolver)
+
 UGMCE_BaseSolver::UGMCE_BaseSolver()
 {
 }
@@ -18,6 +20,12 @@ void UGMCE_BaseSolver::InitializeSolver()
 {
 	if (bUseBlueprintEvents) BlueprintInitializeSolver();
 	NativeInitializeSolver();
+}
+
+void UGMCE_BaseSolver::ActivateSolver(const FGameplayTag& ActiveMovementTag)
+{
+	if (bUseBlueprintEvents) BlueprintActivateSolver(ActiveMovementTag);
+	NativeActivateSolver(ActiveMovementTag);
 }
 
 bool UGMCE_BaseSolver::RunSolver(FSolverState& State, float DeltaTime)
@@ -168,8 +176,85 @@ void UGMCE_BaseSolver::DrawDebugLine_BP(const FVector Start, const FVector End, 
 #endif	
 }
 
+void UGMCE_BaseSolver::SolverLogString(const FString Message, EGMCExtendedLogType SolverLogType, bool bShowOnScreen)
+{
+	FColor ScreenColor = FColor::Cyan;
+
+	FString RoleString = GetNetRoleAsString(MovementComponent->GetOwnerRole());
+	if (MovementComponent->IsRemotelyControlledServerPawn())
+	{
+		RoleString = FString(TEXT("remote ")) + RoleString;
+	}
+	else if (MovementComponent->IsLocallyControlledServerPawn())
+	{
+		RoleString = FString(TEXT("local ")) + RoleString;
+	}
+	
+	switch (SolverLogType)
+	{
+	case EGMCExtendedLogType::DebugLog:
+		if (!bIsDebugActive) return;
+		ScreenColor = FColor::Blue;
+		UE_LOG(LogGMCExtendedSolver, Log, TEXT("[%s: %20s | %26s] %s: %s"),
+			*MovementComponent->GetOwner()->GetName(), *GetNetModeAsString(MovementComponent->GetNetMode()),
+			*RoleString, *GetName(), 
+			*Message)
+		break;
+	case EGMCExtendedLogType::LogVeryVerbose:
+		ScreenColor = FColor::White;
+		UE_LOG(LogGMCExtendedSolver, VeryVerbose, TEXT("[%s: %20s | %26s] %s: %s"),
+			*MovementComponent->GetOwner()->GetName(), *GetNetModeAsString(MovementComponent->GetNetMode()),
+			*RoleString, *GetName(), 
+			*Message)
+		break;
+	case EGMCExtendedLogType::LogVerbose:
+		ScreenColor = FColor::White;
+		UE_LOG(LogGMCExtendedSolver, Verbose, TEXT("[%s: %20s | %26s] %s: %s"),
+			*MovementComponent->GetOwner()->GetName(), *GetNetModeAsString(MovementComponent->GetNetMode()),
+			*RoleString, *GetName(), 
+			*Message)
+		break;
+	case EGMCExtendedLogType::LogWarning:
+		ScreenColor = FColor::Orange;
+		UE_LOG(LogGMCExtendedSolver, Warning, TEXT("[%s: %20s | %26s] %s: %s"),
+			*MovementComponent->GetOwner()->GetName(), *GetNetModeAsString(MovementComponent->GetNetMode()),
+			*RoleString, *GetName(), 
+			*Message)
+		break;
+	case EGMCExtendedLogType::LogError:
+		ScreenColor = FColor::Red;
+		UE_LOG(LogGMCExtendedSolver, Error, TEXT("[%s: %20s | %26s] %s: %s"),
+			*MovementComponent->GetOwner()->GetName(), *GetNetModeAsString(MovementComponent->GetNetMode()),
+			*RoleString, *GetName(), 
+			*Message)
+		break;
+	}
+
+	if (bShowOnScreen)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, ScreenColor, Message);
+	}
+}
+
+void UGMCE_BaseSolver::SolverLogText(const FText Message, EGMCExtendedLogType SolverLogType, bool bShowOnScreen)
+{
+	SolverLogString(Message.ToString(), SolverLogType, bShowOnScreen);
+}
+
+void UGMCE_BaseSolver::ServerSwapStateIfNeeded()
+{
+	if (!MovementComponent->SV_IsExecutingRemoteMoves() && MovementComponent->IsSmoothedListenServerPawn())
+	{
+		MovementComponent->SV_SwapServerState();
+	}
+}
+
 
 void UGMCE_BaseSolver::NativeInitializeSolver()
+{
+}
+
+void UGMCE_BaseSolver::NativeActivateSolver(const FGameplayTag& ActiveMovementTag)
 {
 }
 

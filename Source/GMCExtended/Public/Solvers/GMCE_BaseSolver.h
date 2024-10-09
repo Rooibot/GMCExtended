@@ -10,7 +10,19 @@
 
 class UGMCE_OrganicMovementCmp;
 class UGMCE_SolverMontageWrapper;	
-	
+
+DECLARE_LOG_CATEGORY_EXTERN(LogGMCExtendedSolver, Log, All)
+
+UENUM(BlueprintType)
+enum class EGMCExtendedLogType : uint8
+{
+	DebugLog UMETA(DisplayName = "Debug Only Log"),
+	LogVeryVerbose UMETA(DisplayName = "Very Verbose Log"),
+	LogVerbose UMETA(DisplayName = "Verbose Log"),
+	LogWarning UMETA(DisplayName = "Warning Log"),
+	LogError UMETA(DisplayName = "Error Log")
+};
+
 USTRUCT(BlueprintType)
 struct GMCEXTENDED_API FSolverState
 {
@@ -71,6 +83,13 @@ public:
 	 */
 	void InitializeSolver();
 
+	/**
+	 * Informs the solver that a given movement tag has become active. This will be called when the active
+	 * movement tag changes, even if the solver handles both tags.
+	 * @param ActiveMovementTag The tag which has become active.
+	 */
+	void ActivateSolver(const FGameplayTag& ActiveMovementTag);
+	
 	/**
 	 * Runs the solver to determine if it has any viable movement options.
 	 * Given the current Parcore state, determine if this solver has any viable moves available to it. Any
@@ -150,6 +169,18 @@ protected:
 	/// Draws a line. Will only do anything if in a debug build and with this solver set to debug.
 	UFUNCTION(BlueprintCallable, DisplayName="Draw Debug Line", Category="GMC Extended|Debug")
 	void DrawDebugLine_BP(const FVector Start, const FVector End, const FLinearColor Color, float LineThickness);
+
+	/// Output text to the Unreal log (and optionally the screen).
+	UFUNCTION(BlueprintCallable, DisplayName="Print String to Solver Log", Category="GMC Extended|Debug")
+	void SolverLogString(const FString Message, EGMCExtendedLogType SolverLogType, bool bShowOnScreen);
+
+	/// Output text to the Unreal log (and optionally the screen).
+	UFUNCTION(BlueprintCallable, DisplayName="Print Text to Solver Log", Category="GMC Extended|Debug")
+	void SolverLogText(const FText Message, EGMCExtendedLogType SolverLogType, bool bShowOnScreen);
+	
+
+	UFUNCTION(BlueprintCallable, DisplayName="Swap Server State (if Necessary)", Category="GMC Extended")
+	void ServerSwapStateIfNeeded();
 	
 	// ------ NATIVE
 #pragma region Native
@@ -160,6 +191,12 @@ public:
 	 */
 	virtual void NativeInitializeSolver();
 
+	/**
+	 * Native implementation of ActivateSolver.
+	 * @param ActiveMovementTag The tag which has become active.
+	 */
+	virtual void NativeActivateSolver(const FGameplayTag& ActiveMovementTag);
+	
 	/**
 	 * Native implementation of RunSolver.
 	 * @param State The current Parcore movement state.
@@ -198,6 +235,14 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, DisplayName="Initialize Solver", Category="GMC Extended|Solvers")
 	void BlueprintInitializeSolver();
 
+	/**
+	 * Blueprint implementation of solver initialization.
+	 * Called by GMCEx when the movement component is ready, to allow a solver to setup any initial state it might
+	 * need.
+	 */
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Activate Solver", Category="GMC Extended|Solvers")
+	void BlueprintActivateSolver(FGameplayTag GameplayTag);
+	
 	UFUNCTION(BlueprintImplementableEvent, DisplayName="Get Preferred Solver Tag", Category="GMC Extended|Solvers")
 	void BlueprintGetPreferredSolverTag(UPARAM(DisplayName="Preferred Tag") FGameplayTag& OutTag);
 
@@ -629,7 +674,9 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, DisplayName="Movement Tag", Category="Solver");
 	FGameplayTag SolverMovementModeTag;
-	
+
+
+	friend UGMCE_SolverMontageWrapper;
 };
 
 UCLASS()
@@ -694,25 +741,43 @@ protected:
 	UFUNCTION()
 	void OnMontageStart() const
 	{
-		if (IsValid(Solver)) Solver->OnMontageStart(WrapperHandle, false);
+		if (IsValid(Solver))
+		{
+			Solver->SolverLogString(FString::Printf(TEXT("OnMontageStart (networked): %d"), WrapperHandle),
+				EGMCExtendedLogType::LogVeryVerbose, false);
+			Solver->OnMontageStart(WrapperHandle, false);
+		}
 	}
 
 	UFUNCTION()
 	void OnMontageBlendInComplete() const
 	{
-		if (IsValid(Solver)) Solver->OnMontageBlendInDone(WrapperHandle, false);
+		if (IsValid(Solver))
+		{
+			Solver->SolverLogString(FString::Printf(TEXT("OnMontageBlendInDone (networked): %d"), WrapperHandle),
+				EGMCExtendedLogType::LogVeryVerbose, false);
+			Solver->OnMontageBlendInDone(WrapperHandle, false);
+		}
 	}
 
 	UFUNCTION()
 	void OnMontageBlendOutBegin() const
 	{
-		if (IsValid(Solver)) Solver->OnMontageBlendOutStarted(WrapperHandle, false);
+		if (IsValid(Solver))
+		{
+			Solver->SolverLogString(FString::Printf(TEXT("OnMontageBlendOutStarted (networked): %d"), WrapperHandle),
+				EGMCExtendedLogType::LogVeryVerbose, false);
+			Solver->OnMontageBlendOutStarted(WrapperHandle, false);
+		}
 	}
 
 	UFUNCTION()
 	void OnMontageComplete()
 	{
 		if (!IsValid(Solver)) return;
+
+		Solver->SolverLogString(FString::Printf(TEXT("OnMontageComplete (networked): %d"), WrapperHandle),
+			EGMCExtendedLogType::LogVeryVerbose, false);
 		
 		Solver->OnMontageComplete(WrapperHandle, false);
 		Solver->RemoveMontageWrapper(this);		
@@ -721,39 +786,61 @@ protected:
 	UFUNCTION()
 	void OnMontageStarted_Cosmetic(UAnimMontage* Montage)
 	{
-		if (IsValid(Solver)) Solver->OnMontageStart(WrapperHandle, true);
+		if (IsValid(Solver))
+		{
+			Solver->SolverLogString(FString::Printf(TEXT("OnMontageStart (cosmetic): %d"), WrapperHandle),
+				EGMCExtendedLogType::LogVeryVerbose, false);
+			Solver->OnMontageStart(WrapperHandle, true);
+		}
 	}
 
 	void OnMontageBlendInComplete_Cosmetic(UAnimMontage* Montage)
 	{
-		if (IsValid(Solver)) Solver->OnMontageBlendInDone(WrapperHandle, true);
+		if (IsValid(Solver))
+		{
+			Solver->SolverLogString(FString::Printf(TEXT("OnMontageBlendInDone (cosmetic): %d"), WrapperHandle),
+				EGMCExtendedLogType::LogVeryVerbose, false);
+			Solver->OnMontageBlendInDone(WrapperHandle, true);
+		}
 	}
 	
 	UFUNCTION()
 	void OnMontageBlendOutBegin_Cosmetic(UAnimMontage* Montage, bool bInterrupted)
 	{
+		if (!IsValid(Solver)) return;
+		
 		if (!bInterrupted)
 		{
-			if (IsValid(Solver)) Solver->OnMontageBlendOutStarted(WrapperHandle, true);
+			Solver->SolverLogString(FString::Printf(TEXT("OnMontageBlendOutStarted (cosmetic): %d"), WrapperHandle),
+				EGMCExtendedLogType::LogVeryVerbose, false);
+			Solver->OnMontageBlendOutStarted(WrapperHandle, true);
 		}
 		else if (!bWasInterruptedBeforeComplete)
 		{
-			bWasInterruptedBeforeComplete = true;
-			if (IsValid(Solver)) Solver->OnMontageInterrupted(WrapperHandle, true);
+			Solver->SolverLogString(FString::Printf(TEXT("OnMontageBlendOutStarted (cosmetic, interrupted): %d"), WrapperHandle),
+				EGMCExtendedLogType::LogVeryVerbose, false);
+				bWasInterruptedBeforeComplete = true;
+			Solver->OnMontageInterrupted(WrapperHandle, true);
 		}
 	}
 
 	UFUNCTION()
 	void OnMontageComplete_Cosmetic(UAnimMontage* Montage, bool bInterrupted)
 	{
+		if (!IsValid(Solver)) return;
+		
 		if (!bInterrupted)
 		{
-			if (IsValid(Solver)) Solver->OnMontageComplete(WrapperHandle, true);
+			Solver->SolverLogString(FString::Printf(TEXT("OnMontageComplete (cosmetic): %d"), WrapperHandle),
+				EGMCExtendedLogType::LogVeryVerbose, false);
+			Solver->OnMontageComplete(WrapperHandle, true);
 		}
 		else if (!bWasInterruptedBeforeComplete)
 		{
 			bWasInterruptedBeforeComplete = true;
-			if (IsValid(Solver)) Solver->OnMontageInterrupted(WrapperHandle, true);
+			Solver->SolverLogString(FString::Printf(TEXT("OnMontageComplete (cosmetic, interrupted): %d"), WrapperHandle),
+				EGMCExtendedLogType::LogVeryVerbose, false);
+			Solver->OnMontageInterrupted(WrapperHandle, true);
 		}
 	}
 	

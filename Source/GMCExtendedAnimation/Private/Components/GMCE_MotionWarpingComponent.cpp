@@ -159,6 +159,9 @@ void UGMCE_MotionWarpingComponent::Update(float DeltaSeconds)
 		
 		// Read our values from our montage tracker
 
+		UE_LOG(LogGMCExAnimation, VeryVerbose, TEXT("[%s] get transform %f -> %f"),
+			*MovementComponent->GetComponentDescription(), Context.PreviousPosition, Context.CurrentPosition)
+
 		const float ExpectedDelta = Context.DeltaSeconds * Context.PlayRate;
 		const float ActualDelta = Context.CurrentPosition - Context.PreviousPosition;
 
@@ -316,10 +319,16 @@ void UGMCE_MotionWarpingComponent::BindToMovementComponent()
 	}	
 }
 
-void UGMCE_MotionWarpingComponent::GetLastRootMotionStep(FTransform& OutLastDelta, float &OutLastDeltaTime)
+void UGMCE_MotionWarpingComponent::GetLastRootMotionStep(FTransform& OutLastDelta, float &OutLastDeltaTime, bool bConsume)
 {
 	OutLastDelta = GetMovementComponent()->GetSkeletalMeshReference()->ConvertLocalRootMotionToWorld(LastRootTransform);
 	OutLastDeltaTime = LastDeltaTime;
+
+	if (bConsume)
+	{
+		LastDeltaTime = 0.f;
+		LastRootTransform = FTransform::Identity;
+	}
 }
 
 FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InTransform,

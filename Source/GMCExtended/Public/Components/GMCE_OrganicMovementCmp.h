@@ -100,6 +100,9 @@ public:
 
 	// General functionality
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="GMCExtended|Debug")
+	FString GetComponentDescription();
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Operation")
 	/// When true, the pawn will smoothly rotate around the yaw axis to face the current direction of movement.
 	/// This setting will take precedence over bOrientToInputDirection or bOrientToControlRotationDirection if
@@ -208,6 +211,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Movement Trajectory")
 	bool IsTrajectoryDebugEnabled() const;
+
+private:
+	FString ComponentLogDescriptionString {};
 
 #pragma region Animation Support
 protected:
