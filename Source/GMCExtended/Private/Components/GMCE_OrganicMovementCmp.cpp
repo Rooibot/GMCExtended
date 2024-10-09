@@ -378,12 +378,12 @@ void UGMCE_OrganicMovementCmp::BindReplicationData_Implementation()
 		EGMC_InterpolationFunction::TargetValue
 	);
 
-	// BI_PreviousMontagePosition = BindSinglePrecisionFloat(PreviousMontagePosition,
-	// 	MontageReplication.MontagePrediction.MontagePositionPredictionMode,
-	// 	MontageReplication.MontagePrediction.MontagePositionCombineMode,
-	// 	MontageReplication.MontageSimulation.bReplicateMontagePosition ? EGMC_SimulationMode::Periodic_Output : EGMC_SimulationMode::None,
-	// 	MontageReplication.MontageSimulation.MontagePositionInterpolation
-	// );
+	BI_PreviousMontagePosition = BindSinglePrecisionFloat(PreviousMontagePosition,
+		MontageReplication.MontagePrediction.MontagePositionPredictionMode,
+		MontageReplication.MontagePrediction.MontagePositionCombineMode,
+		MontageReplication.MontageSimulation.bReplicateMontagePosition ? EGMC_SimulationMode::Periodic_Output : EGMC_SimulationMode::None,
+		MontageReplication.MontageSimulation.MontagePositionInterpolation
+	);
 
 	if (OnBindReplicationData.IsBound())
 	{
