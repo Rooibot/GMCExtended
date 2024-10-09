@@ -14,6 +14,16 @@ void UGMCE_BaseSolver::SetupSolverInternal(UGMCE_OrganicMovementCmp* InMovementC
 {
 	this->MovementComponent = InMovementComponent;
 	this->Owner = InMovementComponent->GetGMCPawnOwner();
+
+	Delegate_OnMontageStart.BindUObject(this, &UGMCE_BaseSolver::OnMontageStart_Networked_Internal);
+	Delegate_OnMontageBlendInComplete.BindUObject(this, &UGMCE_BaseSolver::OnMontageBlendInDone_Networked_Internal);
+	Delegate_OnMontageBlendOutBegin.BindUObject(this, &UGMCE_BaseSolver::OnMontageBlendOutBegin_Networked_Internal);
+	Delegate_OnMontageComplete.BindUObject(this, &UGMCE_BaseSolver::OnMontageComplete_Networked_Internal);
+
+	Delegate_OnMontageStarted_Cosmetic.BindUObject(this, &UGMCE_BaseSolver::OnMontageStarted_Cosmetic_Internal);
+	Delegate_OnMontageBlendedInEnded_Cosmetic.BindUObject(this, &UGMCE_BaseSolver::OnMontageBlendInDone_Cosmetic_Internal);
+	Delegate_OnMontageBlendingOutStarted_Cosmetic.BindUObject(this, &UGMCE_BaseSolver::OnMontageBlendOutBegin_Cosmetic_Internal);
+	Delegate_OnMontageEnded_Cosmetic.BindUObject(this, &UGMCE_BaseSolver::OnMontageComplete_Cosmetic_Internal);
 }
 
 void UGMCE_BaseSolver::InitializeSolver()
@@ -478,69 +488,157 @@ bool UGMCE_BaseSolver::CapsuleTraceMultiByProfile(const FVector Start, const FVe
 		bTraceComplex, ActorsToIgnore, DrawDebugType, OutHits, bIgnoreSelf, TraceColor, TraceHitColor, DrawTime);
 }
 
-int UGMCE_BaseSolver::PlayMontageBlocking(USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage,
-	float StartPosition, float PlayRate)
+bool UGMCE_BaseSolver::PlayMontage(USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage,
+	float StartPosition, float PlayRate, bool bBlocking, bool bRouteThroughServer)
 {
-	UGMCE_SolverMontageWrapper* Wrapper = UGMCE_SolverMontageWrapper::PlayMontageBlocking(this,
-		SkeletalMeshComponent, Montage, StartPosition, PlayRate);
 
-	if (!Wrapper) return -1;
-
-	MontageWrappers.Add(Wrapper);
-	return Wrapper->WrapperHandle;
-}
-
-void UGMCE_BaseSolver::RemoveMontageWrapper(UGMCE_SolverMontageWrapper* Wrapper)
-{
-	MontageWrappers.Remove(Wrapper);
-}
-
-void UGMCE_BaseSolver::OnMontageBlendInDone_Implementation(int MontageHandle, bool bIsCosmeticOnly)
-{
-}
-
-void UGMCE_BaseSolver::OnMontageBlendOutStarted_Implementation(int MontageHandle, bool bIsCosmeticOnly)
-{
-}
-
-void UGMCE_BaseSolver::OnMontageStart_Implementation(int MontageHandle, bool bIsCosmeticOnly)
-{
-}
-
-void UGMCE_BaseSolver::OnMontageComplete_Implementation(int MontageHandle, bool bIsCosmeticOnly)
-{
-}
-
-void UGMCE_BaseSolver::OnMontageInterrupted_Implementation(int MontageHandle, bool bIsCosmeticOnly)
-{
-}
-
-
-bool UGMCE_SolverMontageWrapper::PlayMontage(USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage,
-	float StartPosition, float PlayRate)
-{
-	if (!IsValid(Solver) || !IsValid(SkeletalMeshComponent) || !IsValid(Montage)) return false;
-	
-	UGMCE_OrganicMovementCmp *MovementCmp = Solver->GetMovementComponent();
-	if (!IsValid(MovementCmp)) return false;
+	MovementComponent->SetMontageStartDelegate(Delegate_OnMontageStart, MovementComponent->MontageTracker);
+	MovementComponent->SetMontageBlendInDelegate(Delegate_OnMontageBlendInComplete, MovementComponent->MontageTracker);
+	MovementComponent->SetMontageBlendOutDelegate(Delegate_OnMontageBlendOutBegin, MovementComponent->MontageTracker);
+	MovementComponent->SetMontageCompleteDelegate(Delegate_OnMontageComplete, MovementComponent->MontageTracker);
 
 	UAnimInstance* AnimInstance = SkeletalMeshComponent->GetAnimInstance();
-	if (!IsValid(AnimInstance)) return false;		
-	
-	if (MovementCmp->PlayMontage_Blocking(SkeletalMeshComponent, MovementCmp->MontageTracker,
-		Montage, StartPosition, PlayRate) == 0.f)
+	if (IsValid(AnimInstance))
 	{
-		return false;
+		AnimInstance->Montage_SetBlendedInDelegate(Delegate_OnMontageBlendedInEnded_Cosmetic, Montage);
+		AnimInstance->Montage_SetBlendingOutDelegate(Delegate_OnMontageBlendingOutStarted_Cosmetic, Montage);
+		AnimInstance->Montage_SetEndDelegate(Delegate_OnMontageEnded_Cosmetic, Montage);
 	}
 	
-	MovementCmp->SetMontageStartDelegate(Delegate_OnMontageStart, MovementCmp->MontageTracker);
-	MovementCmp->SetMontageBlendInDelegate(Delegate_OnMontageBlendInComplete, MovementCmp->MontageTracker);
-	MovementCmp->SetMontageBlendOutDelegate(Delegate_OnMontageBlendOutBegin, MovementCmp->MontageTracker);
-	MovementCmp->SetMontageCompleteDelegate(Delegate_OnMontageComplete, MovementCmp->MontageTracker);
+	if (bRouteThroughServer && !MovementComponent->GetPawnOwner()->HasAuthority())
+	{
+		SV_PlayMontage_Implementation(SkeletalMeshComponent, Montage, StartPosition, PlayRate, bBlocking);
+	}
 
-	AnimInstance->Montage_SetBlendedInDelegate(Delegate_OnMontageBlendedInEnded_Cosmetic, Montage);
-	AnimInstance->Montage_SetBlendingOutDelegate(Delegate_OnMontageBlendingOutStarted_Cosmetic, Montage);
-	AnimInstance->Montage_SetEndDelegate(Delegate_OnMontageEnded_Cosmetic, Montage);
-
+	PlayMontage_Internal(SkeletalMeshComponent, Montage, StartPosition, PlayRate, bBlocking);
 	return true;
+}
+
+void UGMCE_BaseSolver::PlayMontage_Internal(USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage,
+	float StartPosition, float PlayRate, bool bBlocking)
+{
+	if (bBlocking)
+	{
+		MovementComponent->PlayMontage_Blocking(SkeletalMeshComponent, MovementComponent->MontageTracker, Montage, StartPosition, PlayRate);
+	}
+	else
+	{
+		MovementComponent->PlayMontage_NonBlocking(SkeletalMeshComponent, MovementComponent->MontageTracker, Montage, StartPosition, PlayRate);
+	}
+}
+
+void UGMCE_BaseSolver::SV_PlayMontage_Implementation(USkeletalMeshComponent* SkeletalMeshComponent,
+                                                     UAnimMontage* Montage, float StartPosition, float PlayRate, bool bBlocking)
+{
+	PlayMontage_Internal(SkeletalMeshComponent, Montage, StartPosition, PlayRate, bBlocking);
+}
+
+void UGMCE_BaseSolver::OnMontageStart_Networked_Internal()
+{
+	SolverLogString(FString::Printf(TEXT("OnMontageStart (networked): %s"),
+		*MovementComponent->MontageTracker.Montage->GetName()),
+		EGMCExtendedLogType::LogVeryVerbose, false);
+	OnMontageStart(MovementComponent->MontageTracker.Montage, true);
+	bHasPlayedMontage = true;
+}
+
+void UGMCE_BaseSolver::OnMontageBlendInDone_Networked_Internal()
+{
+	SolverLogString(FString::Printf(TEXT("OnMontageBlendInDone (networked): %s"),
+		*MovementComponent->MontageTracker.Montage->GetName()),
+		EGMCExtendedLogType::LogVeryVerbose, false);
+	OnMontageBlendInDone(MovementComponent->MontageTracker.Montage, true);
+}
+
+void UGMCE_BaseSolver::OnMontageBlendOutBegin_Networked_Internal()
+{
+	SolverLogString(FString::Printf(TEXT("OnMontageBlendOutBegin (networked): %s"),
+		*MovementComponent->MontageTracker.Montage->GetName()),
+		EGMCExtendedLogType::LogVeryVerbose, false);
+	OnMontageBlendOutStarted(MovementComponent->MontageTracker.Montage, true);
+}
+
+void UGMCE_BaseSolver::OnMontageComplete_Networked_Internal()
+{
+	SolverLogString(FString::Printf(TEXT("OnMontageComplete (networked): %s"),
+		*MovementComponent->MontageTracker.Montage->GetName()),
+		EGMCExtendedLogType::LogVeryVerbose, false);
+	OnMontageComplete(MovementComponent->MontageTracker.Montage, true);
+	bWasInterruptedBeforeComplete = false;
+	bHasPlayedMontage = false;
+}
+
+void UGMCE_BaseSolver::OnMontageStarted_Cosmetic_Internal(UAnimMontage* Montage)
+{
+	SolverLogString(FString::Printf(TEXT("OnMontageStart (cosmetic): %s"),
+		*Montage->GetName()),
+		EGMCExtendedLogType::LogVeryVerbose, false);
+	OnMontageStart(Montage, false);
+}
+
+void UGMCE_BaseSolver::OnMontageBlendInDone_Cosmetic_Internal(UAnimMontage* Montage)
+{
+	SolverLogString(FString::Printf(TEXT("OnMontageBlendInDone (cosmetic): %s"),
+		*Montage->GetName()),
+		EGMCExtendedLogType::LogVeryVerbose, false);
+	OnMontageBlendInDone(Montage, false);
+}
+
+void UGMCE_BaseSolver::OnMontageBlendOutBegin_Cosmetic_Internal(UAnimMontage* Montage, bool bInterrupted)
+{
+	if (!bInterrupted)
+	{
+		SolverLogString(FString::Printf(TEXT("OnMontageBlendOutBegin (cosmetic): %s"),
+			*Montage->GetName()),
+			EGMCExtendedLogType::LogVeryVerbose, false);
+		OnMontageBlendOutStarted(Montage, bInterrupted);
+	}
+	else if (!bWasInterruptedBeforeComplete)
+	{
+		SolverLogString(FString::Printf(TEXT("OnMontageBlendOutBegin (cosmetic, interrupted): %s"),
+			*Montage->GetName()),
+			EGMCExtendedLogType::LogVeryVerbose, false);
+		OnMontageInterrupted(Montage, false);
+		bWasInterruptedBeforeComplete = true;
+	}
+}
+
+void UGMCE_BaseSolver::OnMontageComplete_Cosmetic_Internal(UAnimMontage* Montage, bool bInterrupted)
+{
+	if (!bInterrupted)
+	{
+		SolverLogString(FString::Printf(TEXT("OnMontageComplete (cosmetic): %s"),
+			*Montage->GetName()),
+			EGMCExtendedLogType::LogVeryVerbose, false);
+		OnMontageBlendOutStarted(Montage, false);
+	}
+	else if (!bWasInterruptedBeforeComplete)
+	{
+		SolverLogString(FString::Printf(TEXT("OnMontageComplete (cosmetic, interrupted): %s"),
+			*Montage->GetName()),
+			EGMCExtendedLogType::LogVeryVerbose, false);
+		OnMontageInterrupted(Montage, false);
+		bWasInterruptedBeforeComplete = true;
+	}
+}
+
+
+void UGMCE_BaseSolver::OnMontageBlendInDone_Implementation(UAnimMontage* Montage, bool bNetworked)
+{
+}
+
+void UGMCE_BaseSolver::OnMontageBlendOutStarted_Implementation(UAnimMontage* Montage, bool bNetworked)
+{
+}
+
+void UGMCE_BaseSolver::OnMontageStart_Implementation(UAnimMontage* Montage, bool bNetworked)
+{
+}
+
+void UGMCE_BaseSolver::OnMontageComplete_Implementation(UAnimMontage* Montage, bool bNetworked)
+{
+}
+
+void UGMCE_BaseSolver::OnMontageInterrupted_Implementation(UAnimMontage* Montage, bool bNetworked)
+{
 }

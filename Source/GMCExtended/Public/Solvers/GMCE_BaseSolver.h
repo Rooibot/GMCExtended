@@ -9,7 +9,6 @@
 #include "GMCE_BaseSolver.generated.h"
 
 class UGMCE_OrganicMovementCmp;
-class UGMCE_SolverMontageWrapper;	
 
 DECLARE_LOG_CATEGORY_EXTERN(LogGMCExtendedSolver, Log, All)
 
@@ -633,29 +632,66 @@ public:
 
 public:
 	UFUNCTION(BlueprintCallable, Category = "GMC Extended|Solver Utilities")
-	int PlayMontageBlocking(USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage, float StartPosition, float PlayRate);
+	bool PlayMontage(USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage, float StartPosition, float PlayRate, bool bBlocking = true, bool bRouteThroughServer = false);
+	UFUNCTION(Server, Reliable)
+	void SV_PlayMontage(USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage, float StartPosition, float PlayRate, bool bBlocking);
 
-	UFUNCTION(BlueprintNativeEvent)
-	void OnMontageStart(int MontageHandle, bool bIsCosmeticOnly);
-
-	UFUNCTION(BlueprintNativeEvent)
-	void OnMontageBlendInDone(int MontageHandle, bool bIsCosmeticOnly);
+	void PlayMontage_Internal(USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage, float StartPosition, float PlayRate, bool bBlocking);
 	
 	UFUNCTION(BlueprintNativeEvent)
-	void OnMontageBlendOutStarted(int MontageHandle, bool bIsCosmeticOnly);
-	
-	UFUNCTION(BlueprintNativeEvent)
-	void OnMontageComplete(int MontageHandle, bool bIsCosmeticOnly);
+	void OnMontageStart(UAnimMontage* Montage, bool bNetworked);
 
 	UFUNCTION(BlueprintNativeEvent)
-	void OnMontageInterrupted(int MontageHandle, bool bIsCosmeticOnly);
-
-	void RemoveMontageWrapper(UGMCE_SolverMontageWrapper* Wrapper);
+	void OnMontageBlendInDone(UAnimMontage* Montage, bool bNetworked);
 	
-private:
-
-	TArray<UGMCE_SolverMontageWrapper*> MontageWrappers;
+	UFUNCTION(BlueprintNativeEvent)
+	void OnMontageBlendOutStarted(UAnimMontage* Montage, bool bNetworked);
 	
+	UFUNCTION(BlueprintNativeEvent)
+	void OnMontageComplete(UAnimMontage* Montage, bool bNetworked);
+
+	UFUNCTION(BlueprintNativeEvent)
+	void OnMontageInterrupted(UAnimMontage* MontageHandle, bool bNetworked);
+
+protected:
+
+	UFUNCTION()
+	void OnMontageStart_Networked_Internal();
+
+	UFUNCTION()
+	void OnMontageBlendInDone_Networked_Internal();
+
+	UFUNCTION()
+	void OnMontageBlendOutBegin_Networked_Internal();
+
+	UFUNCTION()
+	void OnMontageComplete_Networked_Internal();
+
+	UFUNCTION()
+	void OnMontageStarted_Cosmetic_Internal(UAnimMontage* Montage);
+
+	UFUNCTION()
+	void OnMontageBlendInDone_Cosmetic_Internal(UAnimMontage* Montage);
+
+	UFUNCTION()
+	void OnMontageBlendOutBegin_Cosmetic_Internal(UAnimMontage* Montage, bool bInterrupted);
+
+	UFUNCTION()
+	void OnMontageComplete_Cosmetic_Internal(UAnimMontage* Montage, bool bInterrupted);
+
+	bool bWasInterruptedBeforeComplete { false };
+	bool bHasPlayedMontage { false };
+	
+	FGMC_OnMontageStart						Delegate_OnMontageStart;
+	FGMC_OnMontageBlendInComplete			Delegate_OnMontageBlendInComplete;
+	FGMC_OnMontageBlendOutBegin				Delegate_OnMontageBlendOutBegin;
+	FGMC_OnMontageComplete					Delegate_OnMontageComplete;
+
+	FOnMontageStarted						Delegate_OnMontageStarted_Cosmetic;
+	FOnMontageBlendedInEnded				Delegate_OnMontageBlendedInEnded_Cosmetic;
+	FOnMontageBlendingOutStarted			Delegate_OnMontageBlendingOutStarted_Cosmetic;
+	FOnMontageEnded							Delegate_OnMontageEnded_Cosmetic;
+
 #pragma endregion
 	
 protected:
@@ -675,173 +711,5 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, DisplayName="Movement Tag", Category="Solver");
 	FGameplayTag SolverMovementModeTag;
 
-
-	friend UGMCE_SolverMontageWrapper;
 };
 
-UCLASS()
-class GMCEXTENDED_API UGMCE_SolverMontageWrapper : public UObject
-{
-	GENERATED_BODY()
-
-public:
-
-	static UGMCE_SolverMontageWrapper* PlayMontageBlocking(UGMCE_BaseSolver* Solver, USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage, float StartPosition, float PlayRate)
-	{
-		static int Counter = 0;
-
-		if (!IsValid(Solver)) return nullptr;
-		if (!IsValid(SkeletalMeshComponent)) return nullptr;
-		if (!IsValid(Montage)) return nullptr;
-
-		UGMCE_SolverMontageWrapper* NewWrapper = NewObject<UGMCE_SolverMontageWrapper>(Solver);
-		NewWrapper->Setup(Solver, Counter++);
-		if (NewWrapper->PlayMontage(SkeletalMeshComponent, Montage, StartPosition, PlayRate)) return NewWrapper;
-
-		return nullptr;
-	}
-	
-	void Setup(UGMCE_BaseSolver* NewSolver, int NewHandle)
-	{
-		Solver = NewSolver;
-		WrapperHandle = NewHandle;
-		Delegate_OnMontageStart.BindUObject(this, &UGMCE_SolverMontageWrapper::OnMontageStart);
-		Delegate_OnMontageBlendInComplete.BindUObject(this, &UGMCE_SolverMontageWrapper::OnMontageBlendInComplete);
-		Delegate_OnMontageBlendOutBegin.BindUObject(this, &UGMCE_SolverMontageWrapper::OnMontageBlendOutBegin);
-		Delegate_OnMontageComplete.BindUObject(this, &UGMCE_SolverMontageWrapper::OnMontageComplete);
-
-		Delegate_OnMontageStarted_Cosmetic.BindUObject(this, &UGMCE_SolverMontageWrapper::OnMontageStarted_Cosmetic);
-		Delegate_OnMontageBlendedInEnded_Cosmetic.BindUObject(this, &UGMCE_SolverMontageWrapper::OnMontageBlendInComplete_Cosmetic);
-		Delegate_OnMontageBlendingOutStarted_Cosmetic.BindUObject(this, &UGMCE_SolverMontageWrapper::OnMontageBlendOutBegin_Cosmetic);
-		Delegate_OnMontageEnded_Cosmetic.BindUObject(this, &UGMCE_SolverMontageWrapper::OnMontageComplete_Cosmetic);
-	}
-
-	bool PlayMontage(USkeletalMeshComponent* SkeletalMeshComponent, UAnimMontage* Montage, float StartPosition, float PlayRate);
-	
-	UPROPERTY()
-	int WrapperHandle;
-
-protected:
-
-	UPROPERTY()
-	UGMCE_BaseSolver* Solver;
-	
-	bool bWasInterruptedBeforeComplete;
-	
-	FGMC_OnMontageStart						Delegate_OnMontageStart;
-	FGMC_OnMontageBlendInComplete			Delegate_OnMontageBlendInComplete;
-	FGMC_OnMontageBlendOutBegin				Delegate_OnMontageBlendOutBegin;
-	FGMC_OnMontageComplete					Delegate_OnMontageComplete;
-
-	FOnMontageStarted						Delegate_OnMontageStarted_Cosmetic;
-	FOnMontageBlendedInEnded				Delegate_OnMontageBlendedInEnded_Cosmetic;
-	FOnMontageBlendingOutStarted			Delegate_OnMontageBlendingOutStarted_Cosmetic;
-	FOnMontageEnded							Delegate_OnMontageEnded_Cosmetic;
-	
-	UFUNCTION()
-	void OnMontageStart() const
-	{
-		if (IsValid(Solver))
-		{
-			Solver->SolverLogString(FString::Printf(TEXT("OnMontageStart (networked): %d"), WrapperHandle),
-				EGMCExtendedLogType::LogVeryVerbose, false);
-			Solver->OnMontageStart(WrapperHandle, false);
-		}
-	}
-
-	UFUNCTION()
-	void OnMontageBlendInComplete() const
-	{
-		if (IsValid(Solver))
-		{
-			Solver->SolverLogString(FString::Printf(TEXT("OnMontageBlendInDone (networked): %d"), WrapperHandle),
-				EGMCExtendedLogType::LogVeryVerbose, false);
-			Solver->OnMontageBlendInDone(WrapperHandle, false);
-		}
-	}
-
-	UFUNCTION()
-	void OnMontageBlendOutBegin() const
-	{
-		if (IsValid(Solver))
-		{
-			Solver->SolverLogString(FString::Printf(TEXT("OnMontageBlendOutStarted (networked): %d"), WrapperHandle),
-				EGMCExtendedLogType::LogVeryVerbose, false);
-			Solver->OnMontageBlendOutStarted(WrapperHandle, false);
-		}
-	}
-
-	UFUNCTION()
-	void OnMontageComplete()
-	{
-		if (!IsValid(Solver)) return;
-
-		Solver->SolverLogString(FString::Printf(TEXT("OnMontageComplete (networked): %d"), WrapperHandle),
-			EGMCExtendedLogType::LogVeryVerbose, false);
-		
-		Solver->OnMontageComplete(WrapperHandle, false);
-		Solver->RemoveMontageWrapper(this);		
-	}
-
-	UFUNCTION()
-	void OnMontageStarted_Cosmetic(UAnimMontage* Montage)
-	{
-		if (IsValid(Solver))
-		{
-			Solver->SolverLogString(FString::Printf(TEXT("OnMontageStart (cosmetic): %d"), WrapperHandle),
-				EGMCExtendedLogType::LogVeryVerbose, false);
-			Solver->OnMontageStart(WrapperHandle, true);
-		}
-	}
-
-	void OnMontageBlendInComplete_Cosmetic(UAnimMontage* Montage)
-	{
-		if (IsValid(Solver))
-		{
-			Solver->SolverLogString(FString::Printf(TEXT("OnMontageBlendInDone (cosmetic): %d"), WrapperHandle),
-				EGMCExtendedLogType::LogVeryVerbose, false);
-			Solver->OnMontageBlendInDone(WrapperHandle, true);
-		}
-	}
-	
-	UFUNCTION()
-	void OnMontageBlendOutBegin_Cosmetic(UAnimMontage* Montage, bool bInterrupted)
-	{
-		if (!IsValid(Solver)) return;
-		
-		if (!bInterrupted)
-		{
-			Solver->SolverLogString(FString::Printf(TEXT("OnMontageBlendOutStarted (cosmetic): %d"), WrapperHandle),
-				EGMCExtendedLogType::LogVeryVerbose, false);
-			Solver->OnMontageBlendOutStarted(WrapperHandle, true);
-		}
-		else if (!bWasInterruptedBeforeComplete)
-		{
-			Solver->SolverLogString(FString::Printf(TEXT("OnMontageBlendOutStarted (cosmetic, interrupted): %d"), WrapperHandle),
-				EGMCExtendedLogType::LogVeryVerbose, false);
-				bWasInterruptedBeforeComplete = true;
-			Solver->OnMontageInterrupted(WrapperHandle, true);
-		}
-	}
-
-	UFUNCTION()
-	void OnMontageComplete_Cosmetic(UAnimMontage* Montage, bool bInterrupted)
-	{
-		if (!IsValid(Solver)) return;
-		
-		if (!bInterrupted)
-		{
-			Solver->SolverLogString(FString::Printf(TEXT("OnMontageComplete (cosmetic): %d"), WrapperHandle),
-				EGMCExtendedLogType::LogVeryVerbose, false);
-			Solver->OnMontageComplete(WrapperHandle, true);
-		}
-		else if (!bWasInterruptedBeforeComplete)
-		{
-			bWasInterruptedBeforeComplete = true;
-			Solver->SolverLogString(FString::Printf(TEXT("OnMontageComplete (cosmetic, interrupted): %d"), WrapperHandle),
-				EGMCExtendedLogType::LogVeryVerbose, false);
-			Solver->OnMontageInterrupted(WrapperHandle, true);
-		}
-	}
-	
-};
