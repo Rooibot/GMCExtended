@@ -1,11 +1,8 @@
 #include "Components/GMCE_MotionWarpingComponent.h"
 #include "Animation/AnimNotifyState_GMCExMotionWarp.h"
-#include "GMCExtendedAnimation.h"
 #include "GMCExtendedAnimationLog.h"
 #include "GMCE_MotionWarpingUtilities.h"
 #include "GMCE_MotionWarpTarget.h"
-#include "GMCE_RootMotionModifier_SkewWarp.h"
-#include "GMCE_RootMotionModifier_Warp.h"
 #include "GMCPawn.h"
 
 UGMCE_MotionWarpingComponent::UGMCE_MotionWarpingComponent(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
@@ -125,13 +122,11 @@ UGMCE_RootMotionModifier* UGMCE_MotionWarpingComponent::AddModifierFromTemplate(
 	return nullptr;
 }
 
-void UGMCE_MotionWarpingComponent::Update(float DeltaSeconds)
+void UGMCE_MotionWarpingComponent::Update(FGMCE_MotionWarpContext& WarpContext)
 {
 	AGMC_Pawn* Pawn = GetOwningPawn();
 	check(Pawn);
 
-	FGMCE_MotionWarpContext Context;
-	Context.DeltaSeconds = DeltaSeconds;
 	UGMCE_OrganicMovementCmp *Component = GetMovementComponent();
 	FGMC_MontageTracker& Tracker = Component->MontageTracker;
 	check(Component);
@@ -141,29 +136,30 @@ void UGMCE_MotionWarpingComponent::Update(float DeltaSeconds)
 		const UAnimMontage* Montage = RootMotionMontageInstance->Montage;
 		check(Montage);
 
-		Context.Animation = Montage;
-		Context.Weight = RootMotionMontageInstance->GetWeight();
+		WarpContext.Animation = Montage;
+		WarpContext.Weight = RootMotionMontageInstance->GetWeight();
+		WarpContext.CapsuleHalfHeight = MovementComponent->GetRootCollisionHalfHeight(true);
 
 		if (FGMCE_MotionWarpCvars::CVarMotionWarpingFromTracker.GetValueOnGameThread())
 		{
-			Context.CurrentPosition = Tracker.MontagePosition;
-			Context.PreviousPosition = Component->PreviousMontagePosition;
-			Context.PlayRate = Tracker.MontagePlayRate;
+			WarpContext.CurrentPosition = Tracker.MontagePosition;
+			WarpContext.PreviousPosition = Component->PreviousMontagePosition;
+			WarpContext.PlayRate = Tracker.MontagePlayRate;
 		}
 		else
 		{
-			Context.CurrentPosition = RootMotionMontageInstance->GetPosition();
-			Context.PreviousPosition = RootMotionMontageInstance->GetPreviousPosition();
-			Context.PlayRate = RootMotionMontageInstance->GetPlayRate();
+			WarpContext.CurrentPosition = RootMotionMontageInstance->GetPosition();
+			WarpContext.PreviousPosition = RootMotionMontageInstance->GetPreviousPosition();
+			WarpContext.PlayRate = RootMotionMontageInstance->GetPlayRate();
 		}
 		
 		// Read our values from our montage tracker
 
 		UE_LOG(LogGMCExAnimation, VeryVerbose, TEXT("[%s] get transform %f -> %f"),
-			*MovementComponent->GetComponentDescription(), Context.PreviousPosition, Context.CurrentPosition)
+			*MovementComponent->GetComponentDescription(), WarpContext.PreviousPosition, WarpContext.CurrentPosition)
 
-		const float ExpectedDelta = Context.DeltaSeconds * Context.PlayRate;
-		const float ActualDelta = Context.CurrentPosition - Context.PreviousPosition;
+		const float ExpectedDelta = WarpContext.DeltaSeconds * WarpContext.PlayRate;
+		const float ActualDelta = WarpContext.CurrentPosition - WarpContext.PreviousPosition;
 
 		if (!FMath::IsNearlyZero(FMath::Abs(ActualDelta - ExpectedDelta), UE_KINDA_SMALL_NUMBER) && Modifiers.Num() > 0)
 		{
@@ -171,16 +167,16 @@ void UGMCE_MotionWarpingComponent::Update(float DeltaSeconds)
 
 			for (const auto& Modifier : Modifiers)
 			{
-				bRelevantCorrections = bRelevantCorrections || Modifier->IsPositionWithinWindow(Context.PreviousPosition) || Modifier->IsPositionWithinWindow(Context.CurrentPosition);
+				bRelevantCorrections = bRelevantCorrections || Modifier->IsPositionWithinWindow(WarpContext.PreviousPosition) || Modifier->IsPositionWithinWindow(WarpContext.CurrentPosition);
 			}
 
 			if (bRelevantCorrections)
 			{
 				// Our position has passed out of one or more warping windows; cheat and correct our effective delta seconds to match.
-				Context.DeltaSeconds = (Context.CurrentPosition - Context.PreviousPosition) / Context.PlayRate;
+				WarpContext.DeltaSeconds = (WarpContext.CurrentPosition - WarpContext.PreviousPosition) / WarpContext.PlayRate;
 
 				UE_LOG(LogGMCExAnimation, Verbose, TEXT("Motion Warping: position delta exceeds expected, shifting delta seconds from %f to %f. %s"),
-					DeltaSeconds, Context.DeltaSeconds, *GetOwner()->GetName())
+					WarpContext.DeltaSeconds, WarpContext.DeltaSeconds, *GetOwner()->GetName())
 
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 				const int32 DebugLevel = FGMCE_MotionWarpCvars::CVarMotionWarpingDebug.GetValueOnGameThread();
@@ -196,11 +192,11 @@ void UGMCE_MotionWarpingComponent::Update(float DeltaSeconds)
 		}
 	}
 
-	if (Context.Animation.IsValid())
+	if (WarpContext.Animation.IsValid())
 	{
-		const UAnimSequenceBase* Animation = Context.Animation.Get();
-		const float PreviousPosition = Context.PreviousPosition;
-		const float CurrentPosition = Context.CurrentPosition;
+		const UAnimSequenceBase* Animation = WarpContext.Animation.Get();
+		const float PreviousPosition = WarpContext.PreviousPosition;
+		const float CurrentPosition = WarpContext.CurrentPosition;
 
 		for (const FAnimNotifyEvent& NotifyEvent : Animation->Notifies)
 		{
@@ -210,7 +206,7 @@ void UGMCE_MotionWarpingComponent::Update(float DeltaSeconds)
 				if (MotionWarpNotify->RootMotionModifier == nullptr)
 				{
 					UE_LOG(LogGMCExAnimation, Warning, TEXT("Motion Warping: a warping window in %s lacks a valid root motion modifier."),
-						*GetNameSafe(Context.Animation.Get()))
+						*GetNameSafe(WarpContext.Animation.Get()))
 					continue;
 				}
 
@@ -229,7 +225,7 @@ void UGMCE_MotionWarpingComponent::Update(float DeltaSeconds)
 
 		if (bSearchForWindowsInAnims)
 		{
-			if (const UAnimMontage* Montage = Cast<const UAnimMontage>(Context.Animation.Get()))
+			if (const UAnimMontage* Montage = Cast<const UAnimMontage>(WarpContext.Animation.Get()))
 			{
 				for (int32 SlotIdx = 0; SlotIdx < Montage->SlotAnimTracks.Num(); SlotIdx++)
 				{
@@ -280,7 +276,7 @@ void UGMCE_MotionWarpingComponent::Update(float DeltaSeconds)
 		// Run all modifier updates.
 		for (UGMCE_RootMotionModifier* Modifier : Modifiers)
 		{
-			Modifier->Update(Context);
+			Modifier->Update(WarpContext);
 		}
 
 		// Remove any modifiers now marked for removal.
@@ -331,7 +327,7 @@ void UGMCE_MotionWarpingComponent::GetLastRootMotionStep(FTransform& OutLastDelt
 	}
 }
 
-FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InTransform,
+FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InTransform, const FTransform& ActorTransform, const FTransform& MeshRelativeTransform,
                                                            UGMCE_OrganicMovementCmp* GMCMovementComponent, float DeltaSeconds)
 {
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
@@ -340,11 +336,18 @@ FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InT
 		return InTransform;
 	}
 #endif
-	
+
+	// Force this to load now, else we're in for pain.
 	MotionWarpSubject->MotionWarping_GetMeshComponent()->GetAnimInstance();
+
+	FGMCE_MotionWarpContext WarpContext;
+	WarpContext.DeltaSeconds = DeltaSeconds;
+	WarpContext.OwnerTransform = ActorTransform;
+	WarpContext.MeshRelativeTransform = MeshRelativeTransform;
+	
 	
 	// Check for warping windows and update modifier states
-	Update(DeltaSeconds);
+	Update(WarpContext);
 
 	FTransform FinalRootMotion = InTransform;
 
@@ -353,7 +356,7 @@ FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InT
 	{
 		if (Modifier->GetState() == EGMCE_RootMotionModifierState::Active)
 		{
-			FinalRootMotion = Modifier->ProcessRootMotion(FinalRootMotion, DeltaSeconds);
+			FinalRootMotion = Modifier->ProcessRootMotion(FinalRootMotion, WarpContext);
 		}
 	}
 

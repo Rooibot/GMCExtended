@@ -206,7 +206,7 @@ protected:
 	// Called by GMCEx when processing root motion montages; this is where the meat of the
 	// motion warping happens, as it is what actually modifies the transform before GMCv2
 	// applies it.
-	virtual FTransform ProcessRootMotion(const FTransform& InTransform, UGMCE_OrganicMovementCmp* MovementComponent, float DeltaSeconds);
+	virtual FTransform ProcessRootMotion(const FTransform& InTransform, const FTransform& ActorTransform, const FTransform& MeshRelativeTransform, UGMCE_OrganicMovementCmp* MovementComponent, float DeltaSeconds);
 	
 	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, AdvancedDisplay, Category="Motion Warping")
 	UGMCE_OrganicMovementCmp* MovementComponent;
@@ -234,7 +234,7 @@ protected:
 	UPROPERTY()
 	float LastDeltaTime;
 	
-	void Update(float DeltaSeconds);
+	void Update(FGMCE_MotionWarpContext& WarpContext);
 	
 private:
 	void AddOrUpdateWarpTarget_Internal(FGMCE_MotionWarpTarget& Target);

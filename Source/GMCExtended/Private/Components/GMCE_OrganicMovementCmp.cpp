@@ -917,7 +917,9 @@ void UGMCE_OrganicMovementCmp::PreProcessRootMotion(const FGMC_AnimMontageInstan
 	// handle motion warping.
 	if (ProcessRootMotionPreConvertToWorld.IsBound())
 	{
-		InOutRootMotionParams.Set(ProcessRootMotionPreConvertToWorld.Execute(InOutRootMotionParams.GetRootMotionTransform(), this, DeltaSeconds));
+		const FTransform MeshRelativeTransform = SkeletalMesh->GetRelativeTransform();
+		
+		InOutRootMotionParams.Set(ProcessRootMotionPreConvertToWorld.Execute(InOutRootMotionParams.GetRootMotionTransform(), GetActorTransform_GMC(), MeshRelativeTransform, this, DeltaSeconds));
 	}
 
 	Super::PreProcessRootMotion(MontageInstance, InOutRootMotionParams, DeltaSeconds);

@@ -38,6 +38,9 @@ struct FGMCE_MotionWarpContext
 
 	UPROPERTY()
 	FTransform MeshRelativeTransform { FTransform::Identity };
+
+	UPROPERTY()
+	float CapsuleHalfHeight { 0.f };
 	
 };
 
@@ -108,7 +111,7 @@ public:
 	AGMC_Pawn* GetPawnOwner() const;
 
 	virtual void Update(const FGMCE_MotionWarpContext& Context);
-	virtual FTransform ProcessRootMotion(const FTransform& InRootMotion, float DeltaSeconds) { return FTransform::Identity; }
+	virtual FTransform ProcessRootMotion(const FTransform& InRootMotion, const FGMCE_MotionWarpContext& WarpContext) { return FTransform::Identity; }
 
 	FORCEINLINE const UAnimSequenceBase* GetAnimation() const { return AnimationSequence.Get(); }
 
