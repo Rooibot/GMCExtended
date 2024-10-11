@@ -155,33 +155,53 @@ void UGMCE_MotionWarpingUtilities::GetMotionWarpingWindowsForWarpTargetFromAnima
 	}	
 }
 
+FTransform UGMCE_MotionWarpingUtilities::CalculateRootTransformRelativeToWarpPointAtTime(
+	const FTransform& RelativeTransform, const UAnimInstance* AnimInstance, const UAnimSequenceBase* Animation,
+	float Time, const FName& WarpPointBoneName)
+{
+	const FBoneContainer& FullBoneContainer = AnimInstance->GetRequiredBones();
+	const int32 BoneIndex = FullBoneContainer.GetPoseBoneIndexForBoneName(WarpPointBoneName);
+	if (BoneIndex != INDEX_NONE && BoneIndex != 0)
+	{
+		TArray<FBoneIndexType> RequiredBoneIndexArray = { 0, (FBoneIndexType)BoneIndex };
+		FullBoneContainer.GetReferenceSkeleton().EnsureParentsExistAndSort(RequiredBoneIndexArray);
+
+		FBoneContainer LimitedBoneContainer(RequiredBoneIndexArray, UE::Anim::FCurveFilterSettings(UE::Anim::ECurveFilterMode::DisallowAll), *FullBoneContainer.GetAsset());
+
+		FCSPose<FCompactPose> Pose;
+		ExtractComponentSpacePose(Animation, LimitedBoneContainer, Time, false, Pose);
+
+		// Inverse of mesh's relative rotation. Used to convert root and warp point in the animation from Y forward to X forward
+		const FTransform MeshCompRelativeRotInverse = FTransform(RelativeTransform.GetRotation().Inverse());
+
+		const FTransform RootTransform = MeshCompRelativeRotInverse * Pose.GetComponentSpaceTransform(FCompactPoseBoneIndex(0));
+		const FTransform WarpPointTransform = MeshCompRelativeRotInverse * Pose.GetComponentSpaceTransform(FCompactPoseBoneIndex(1));
+		return RootTransform.GetRelativeTransform(WarpPointTransform);
+	}
+
+	return FTransform::Identity;
+}
+
+FTransform UGMCE_MotionWarpingUtilities::CalculateRootTransformRelativeToWarpPointAtTime(
+	const FTransform& RelativeTransform, const UAnimSequenceBase* Animation, float Time,
+	const FTransform& WarpPointTransform)
+{
+	// Inverse of mesh's relative rotation. Used to convert root and warp point in the animation from Y forward to X forward
+	const FTransform MeshCompRelativeRotInverse = FTransform(RelativeTransform.GetRotation().Inverse());
+	const FTransform RootTransform = MeshCompRelativeRotInverse * ExtractRootTransformFromAnimation(Animation, Time);
+	return RootTransform.GetRelativeTransform((MeshCompRelativeRotInverse * WarpPointTransform));	
+}
+
 FTransform UGMCE_MotionWarpingUtilities::CalculateRootTransformRelativeToWarpPointAtTime(AGMC_Pawn* Character,
-	const UAnimSequenceBase* Animation, float Time, const FName& WarpPointBoneName)
+                                                                                         const UAnimSequenceBase* Animation, float Time, const FName& WarpPointBoneName)
 {
 	IGMCE_MotionWarpSubject* MotionWarpInterface =Cast<IGMCE_MotionWarpSubject>(Character);
 	if (const USkeletalMeshComponent* Mesh = MotionWarpInterface->MotionWarping_GetMeshComponent())
 	{
 		if (const UAnimInstance* AnimInstance = Mesh->GetAnimInstance())
 		{
-			const FBoneContainer& FullBoneContainer = AnimInstance->GetRequiredBones();
-			const int32 BoneIndex = FullBoneContainer.GetPoseBoneIndexForBoneName(WarpPointBoneName);
-			if (BoneIndex != INDEX_NONE && BoneIndex != 0)
-			{
-				TArray<FBoneIndexType> RequiredBoneIndexArray = { 0, (FBoneIndexType)BoneIndex };
-				FullBoneContainer.GetReferenceSkeleton().EnsureParentsExistAndSort(RequiredBoneIndexArray);
-
-				FBoneContainer LimitedBoneContainer(RequiredBoneIndexArray, UE::Anim::FCurveFilterSettings(UE::Anim::ECurveFilterMode::DisallowAll), *FullBoneContainer.GetAsset());
-
-				FCSPose<FCompactPose> Pose;
-				ExtractComponentSpacePose(Animation, LimitedBoneContainer, Time, false, Pose);
-
-				// Inverse of mesh's relative rotation. Used to convert root and warp point in the animation from Y forward to X forward
-				const FTransform MeshCompRelativeRotInverse = FTransform(MotionWarpInterface->MotionWarping_GetRotationOffset().Inverse());
-
-				const FTransform RootTransform = MeshCompRelativeRotInverse * Pose.GetComponentSpaceTransform(FCompactPoseBoneIndex(0));
-				const FTransform WarpPointTransform = MeshCompRelativeRotInverse * Pose.GetComponentSpaceTransform(FCompactPoseBoneIndex(1));
-				return RootTransform.GetRelativeTransform(WarpPointTransform);
-			}
+			return CalculateRootTransformRelativeToWarpPointAtTime(FTransform(MotionWarpInterface->MotionWarping_GetRotationOffset()),
+				AnimInstance, Animation, Time, WarpPointBoneName);
 		}
 	}
 
@@ -192,8 +212,5 @@ FTransform UGMCE_MotionWarpingUtilities::CalculateRootTransformRelativeToWarpPoi
 	const UAnimSequenceBase* Animation, float Time, const FTransform& WarpPointTransform)
 {
 	IGMCE_MotionWarpSubject* MotionWarpInterface =Cast<IGMCE_MotionWarpSubject>(Character);
-	// Inverse of mesh's relative rotation. Used to convert root and warp point in the animation from Y forward to X forward
-	const FTransform MeshCompRelativeRotInverse = FTransform(MotionWarpInterface->MotionWarping_GetRotationOffset().Inverse());
-	const FTransform RootTransform = MeshCompRelativeRotInverse * ExtractRootTransformFromAnimation(Animation, Time);
-	return RootTransform.GetRelativeTransform((MeshCompRelativeRotInverse * WarpPointTransform));
+	return CalculateRootTransformRelativeToWarpPointAtTime(FTransform(MotionWarpInterface->MotionWarping_GetRotationOffset()), Animation, Time, WarpPointTransform);
 }

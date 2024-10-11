@@ -33,6 +33,11 @@ struct FGMCE_MotionWarpContext
 	UPROPERTY()
 	float DeltaSeconds { 0.f };
 
+	UPROPERTY()
+	FTransform OwnerTransform { FTransform::Identity };
+
+	UPROPERTY()
+	FTransform MeshRelativeTransform { FTransform::Identity };
 	
 };
 
