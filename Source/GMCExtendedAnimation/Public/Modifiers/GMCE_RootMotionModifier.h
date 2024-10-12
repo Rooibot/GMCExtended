@@ -3,46 +3,13 @@
 #include "CoreMinimal.h"
 #include "GMCPawn.h"
 #include "UObject/Object.h"
+#include "GMCE_MotionWarpContext.h"
 #include "GMCE_RootMotionModifier.generated.h"
 
 class UGMCE_MotionWarpingComponent;
 class UGMCE_RootMotionModifier;
 
 DECLARE_DYNAMIC_DELEGATE_TwoParams(FGMCExRootMotionModifierDelegate, UGMCE_MotionWarpingComponent*, MotionComponent, UGMCE_RootMotionModifier*, Modifier);
-
-USTRUCT()
-struct FGMCE_MotionWarpContext
-{
-	GENERATED_BODY()
-
-	UPROPERTY()
-	TWeakObjectPtr<const UAnimSequenceBase> Animation { nullptr };
-
-	UPROPERTY()
-	float PreviousPosition { 0.f };
-
-	UPROPERTY()
-	float CurrentPosition { 0.f };
-
-	UPROPERTY()
-	float Weight { 0.f };
-
-	UPROPERTY()
-	float PlayRate { 0.f };
-
-	UPROPERTY()
-	float DeltaSeconds { 0.f };
-
-	UPROPERTY()
-	FTransform OwnerTransform { FTransform::Identity };
-
-	UPROPERTY()
-	FTransform MeshRelativeTransform { FTransform::Identity };
-
-	UPROPERTY()
-	float CapsuleHalfHeight { 0.f };
-	
-};
 
 UENUM(BlueprintType)
 enum class EGMCE_RootMotionModifierState : uint8

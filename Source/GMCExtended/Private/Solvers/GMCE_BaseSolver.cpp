@@ -504,12 +504,13 @@ bool UGMCE_BaseSolver::PlayMontage(USkeletalMeshComponent* SkeletalMeshComponent
 		AnimInstance->Montage_SetBlendingOutDelegate(Delegate_OnMontageBlendingOutStarted_Cosmetic, Montage);
 		AnimInstance->Montage_SetEndDelegate(Delegate_OnMontageEnded_Cosmetic, Montage);
 	}
+
 	
 	if (bRouteThroughServer && !MovementComponent->GetPawnOwner()->HasAuthority())
 	{
 		SV_PlayMontage_Implementation(SkeletalMeshComponent, Montage, StartPosition, PlayRate, bBlocking);
 	}
-
+	
 	PlayMontage_Internal(SkeletalMeshComponent, Montage, StartPosition, PlayRate, bBlocking);
 	return true;
 }

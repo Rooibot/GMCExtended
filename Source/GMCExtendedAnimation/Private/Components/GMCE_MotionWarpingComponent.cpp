@@ -137,24 +137,33 @@ void UGMCE_MotionWarpingComponent::Update(FGMCE_MotionWarpContext& WarpContext)
 		check(Montage);
 
 		WarpContext.Animation = Montage;
-		WarpContext.Weight = RootMotionMontageInstance->GetWeight();
-		WarpContext.CapsuleHalfHeight = MovementComponent->GetRootCollisionHalfHeight(true);
 
-		if (FGMCE_MotionWarpCvars::CVarMotionWarpingFromTracker.GetValueOnGameThread())
+		if (WarpContext.Weight == 0.f)
 		{
-			WarpContext.CurrentPosition = Tracker.MontagePosition;
-			WarpContext.PreviousPosition = Component->PreviousMontagePosition;
-			WarpContext.PlayRate = Tracker.MontagePlayRate;
+			WarpContext.Weight = RootMotionMontageInstance->GetWeight();
 		}
-		else
+		if (WarpContext.CapsuleHalfHeight == 0.f)
 		{
-			WarpContext.CurrentPosition = RootMotionMontageInstance->GetPosition();
-			WarpContext.PreviousPosition = RootMotionMontageInstance->GetPreviousPosition();
-			WarpContext.PlayRate = RootMotionMontageInstance->GetPlayRate();
+			WarpContext.CapsuleHalfHeight = MovementComponent->GetRootCollisionHalfHeight(true);
+		}
+
+		if (WarpContext.CurrentPosition == 0.f && WarpContext.PreviousPosition == 0.f && WarpContext.PlayRate == 0.f)
+		{
+			if (FGMCE_MotionWarpCvars::CVarMotionWarpingFromTracker.GetValueOnGameThread())
+			{
+				// Read our values from our montage tracker
+				WarpContext.CurrentPosition = Tracker.MontagePosition;
+				WarpContext.PreviousPosition = Component->PreviousMontagePosition;
+				WarpContext.PlayRate = Tracker.MontagePlayRate;
+			}
+			else
+			{
+				WarpContext.CurrentPosition = RootMotionMontageInstance->GetPosition();
+				WarpContext.PreviousPosition = RootMotionMontageInstance->GetPreviousPosition();
+				WarpContext.PlayRate = RootMotionMontageInstance->GetPlayRate();
+			}
 		}
 		
-		// Read our values from our montage tracker
-
 		UE_LOG(LogGMCExAnimation, VeryVerbose, TEXT("[%s] get transform %f -> %f"),
 			*MovementComponent->GetComponentDescription(), WarpContext.PreviousPosition, WarpContext.CurrentPosition)
 
@@ -327,6 +336,25 @@ void UGMCE_MotionWarpingComponent::GetLastRootMotionStep(FTransform& OutLastDelt
 	}
 }
 
+FTransform UGMCE_MotionWarpingComponent::ProcessRootMotionFromContext(const FTransform& InTransform,
+	FGMCE_MotionWarpContext& InContext)
+{
+	// Check for warping windows and update modifier states
+	Update(InContext);
+	FTransform FinalRootMotion = InTransform;
+
+	// Apply Local Space Modifiers
+	for (UGMCE_RootMotionModifier* Modifier : Modifiers)
+	{
+		if (Modifier->GetState() == EGMCE_RootMotionModifierState::Active)
+		{
+			FinalRootMotion = Modifier->ProcessRootMotion(FinalRootMotion, InContext);
+		}
+	}
+
+	return FinalRootMotion;
+}
+
 FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InTransform, const FTransform& ActorTransform, const FTransform& MeshRelativeTransform,
                                                            UGMCE_OrganicMovementCmp* GMCMovementComponent, float DeltaSeconds)
 {
@@ -344,21 +372,8 @@ FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InT
 	WarpContext.DeltaSeconds = DeltaSeconds;
 	WarpContext.OwnerTransform = ActorTransform;
 	WarpContext.MeshRelativeTransform = MeshRelativeTransform;
-	
-	
-	// Check for warping windows and update modifier states
-	Update(WarpContext);
 
-	FTransform FinalRootMotion = InTransform;
-
-	// Apply Local Space Modifiers
-	for (UGMCE_RootMotionModifier* Modifier : Modifiers)
-	{
-		if (Modifier->GetState() == EGMCE_RootMotionModifierState::Active)
-		{
-			FinalRootMotion = Modifier->ProcessRootMotion(FinalRootMotion, WarpContext);
-		}
-	}
+	FTransform FinalRootMotion = ProcessRootMotionFromContext(InTransform, WarpContext);
 
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	USkeletalMeshComponent* MeshCmp = GMCMovementComponent->GetSkeletalMeshReference();

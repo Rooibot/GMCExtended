@@ -1,5 +1,4 @@
 ﻿#include "Components/GMCE_OrganicMovementCmp.h"
-
 #include "GMCExtendedLog.h"
 #include "GMCE_TrackedCurveProvider.h"
 #include "GMCPawn.h"
@@ -661,8 +660,8 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 				// and mantling.
 				if (const FGameplayTag& NewSolverTag = Solver->GetPreferredSolverTag(); NewSolverTag != CurrentActiveSolverTag)
 				{
-					UE_LOG(LogGMCExtended, Verbose, TEXT("[%s] %s: changed active movement tag from %s to %s"),
-						*GetComponentDescription(), *Solver->GetName(), *CurrentActiveSolverTag.ToString(), *NewSolverTag.ToString())
+					GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("[%f] SOLVER: %s changed active movement tag from %s to %s"),
+						GetMoveTimestamp(), *Solver->GetName(), *CurrentActiveSolverTag.ToString(), *NewSolverTag.ToString())
 					
 					// Solver is changing into some different sub-mode.
 					OnSolverChangedMode(NewSolverTag, CurrentActiveSolverTag);
@@ -672,8 +671,8 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 			}
 			else
 			{
-				UE_LOG(LogGMCExtended, Verbose, TEXT("[%s] %s: surrendered control of movement"),
-					*GetComponentDescription(), *Solver->GetName())
+				GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("[%s] SOLVER: %s surrendered control of movement"),
+					GetMoveTimestamp(), *Solver->GetName())
 				
 				OnSolverChangedMode(FGameplayTag::EmptyTag, CurrentActiveSolverTag);
 				CurrentActiveSolverTag = FGameplayTag::EmptyTag;
@@ -1739,8 +1738,8 @@ bool UGMCE_OrganicMovementCmp::TryActivateSolver(const FGameplayTag& SolverTag)
 		{
 			if (SolverTag.MatchesTag(Solver->GetTag()))
 			{
-				UE_LOG(LogGMCExtended, Verbose, TEXT("[%s] %s: trying to activate solver"),
-					*GetComponentDescription(), *Solver->GetName())
+				GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("[%f] SOLVER: trying to activate solver %s for tag %s"),
+					GetMoveTimestamp(), *Solver->GetName(), *SolverTag.ToString())
 				
 				FGameplayTag OldMode = CurrentActiveSolverTag;
 				CurrentActiveSolverTag = Solver->GetPreferredSolverTag();

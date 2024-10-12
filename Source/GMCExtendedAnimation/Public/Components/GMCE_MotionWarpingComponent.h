@@ -195,6 +195,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category="GMC Extended|Motion Warping")
 	void GetLastRootMotionStep(FTransform& OutDeltaTransform, float& OutDeltaTime, bool bConsume = true);
 
+	virtual FTransform ProcessRootMotionFromContext(const FTransform& InTransform, FGMCE_MotionWarpContext& InContext);
+	
 protected:
 
 	// We use BeginPlay rather than InitializeComponent so that we know we can pick up components if they were
@@ -207,7 +209,7 @@ protected:
 	// motion warping happens, as it is what actually modifies the transform before GMCv2
 	// applies it.
 	virtual FTransform ProcessRootMotion(const FTransform& InTransform, const FTransform& ActorTransform, const FTransform& MeshRelativeTransform, UGMCE_OrganicMovementCmp* MovementComponent, float DeltaSeconds);
-	
+
 	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, AdvancedDisplay, Category="Motion Warping")
 	UGMCE_OrganicMovementCmp* MovementComponent;
 
