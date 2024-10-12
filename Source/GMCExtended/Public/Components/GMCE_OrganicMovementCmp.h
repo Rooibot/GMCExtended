@@ -4,7 +4,7 @@
 #include "GMCE_CoreComponent.h"
 #include "GMCOrganicMovementComponent.h"
 #include "Containers/RingBuffer.h"
-#include "Solvers/GMCE_BaseSolver.h"
+#include "Solvers/GMCE_SolverTypes.h"
 #include "Support/GMCEMovementSample.h"
 #include "GMCE_OrganicMovementCmp.generated.h"
 
@@ -12,6 +12,7 @@
 DECLARE_DELEGATE_RetVal_FiveParams(FTransform, FOnProcessRootMotionGMC, const FTransform&, const FTransform&, const FTransform&, UGMCE_OrganicMovementCmp*, float)
 DECLARE_DELEGATE_TwoParams(FOnSyncDataApplied, const FGMC_PawnState&, EGMC_NetContext)
 DECLARE_DELEGATE(FOnBindReplicationData)
+DECLARE_DELEGATE(FGMCE_OnMontageStopped)
 
 class UGMCE_BaseSolver;
 
@@ -97,7 +98,15 @@ public:
 
 	virtual void MontageUpdate(float DeltaSeconds) override;
 	virtual void OnMontageStarted(UAnimMontage* Montage, float Position, float PlayRate, bool bInterrupted, float DeltaSeconds) override;
+	virtual void OnMontageCompleted(UAnimMontage* Montage, float Position, float PlayRate, float DeltaSeconds) override;
+	virtual void OnMontageStopped(UAnimMontage* Montage);
 
+	UFUNCTION(BlueprintCallable, BlueprintPure=false, Category="GMCExtended")
+	void StopMontageWithDelegate(USkeletalMeshComponent* Mesh, UPARAM(ref) FGMC_MontageTracker& InMontageTracker, float BlendOutTime, bool bWhenExtrapolating, bool bViaServer = false);
+
+	UFUNCTION(Server, reliable)
+	void SV_StopMontageWithDelegate(USkeletalMeshComponent* Mesh, float BlendOutTime, bool bWhenExtrapolating);
+	
 	// General functionality
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="GMCExtended|Debug")
@@ -243,6 +252,8 @@ public:
 	FOnSyncDataApplied OnSyncDataAppliedDelegate;
 	FOnBindReplicationData OnBindReplicationData;
 
+	FGMCE_OnMontageStopped OnMontageStoppedDelegate{};
+
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	FVector LastLandingVelocity { 0.f };
 
@@ -251,6 +262,8 @@ public:
 	float PreviousMontagePosition { 0.f };
 
 protected:
+	void ResyncMeshOffset(float DeltaSeconds);
+	
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	FRotator CurrentAimRotation { FRotator::ZeroRotator };
 
@@ -281,11 +294,24 @@ protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Animation Helpers")
 	FVector CurrentAnimationAcceleration { 0.f };
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Root Motion")
+	bool bUseRootMotionSmoothing { false };
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Root Motion")
+	float RootMotionSmoothingSpeed { 5.f };
+	
+
 	FVector LastAnimationVelocity { 0.f };
 
 	int32 BI_LastLandingVelocity { -1 };
 	int32 BI_PreviousMontagePosition { -1 };
-	
+
+	FTransform OriginalSkeletalMeshTransform { FTransform::Identity };
+	FTransform AccumulatedSmoothRootMotionTransform { FTransform::Identity };
+	FTransform PreviousSmoothRootMotionTransform { FTransform::Identity };
+	FVector PreviousMeshSmoothActorLocation { FVector::ZeroVector };
+	FVector PreviousMeshSmoothTargetLocation { FVector::ZeroVector };
+	bool bWantsSkeletalMeshOffsetReset { false };
 
 #pragma endregion
 	

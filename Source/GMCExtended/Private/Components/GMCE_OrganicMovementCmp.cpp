@@ -6,6 +6,8 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Support/GMCE_UtilityLibrary.h"
+#include "GMCE_BaseSolver.h"
+#include "SkeletalMeshDeformerHelpers.h"
 #include "Replication/Compression.h"
 
 #define TURN_IN_PLACE_ENDPOINT 5.f
@@ -51,6 +53,8 @@ void UGMCE_OrganicMovementCmp::BeginPlay()
 		Solver->InitializeSolver();
 	}
 
+	if (IsValid(SkeletalMesh))
+		OriginalSkeletalMeshTransform = SkeletalMesh->GetRelativeTransform();
 }
 
 
@@ -58,9 +62,14 @@ void UGMCE_OrganicMovementCmp::BeginPlay()
 void UGMCE_OrganicMovementCmp::TickComponent(float DeltaTime, ELevelTick TickType,
                                              FActorComponentTickFunction* ThisTickFunction)
 {
+	if (OriginalSkeletalMeshTransform.Equals(FTransform::Identity) && IsValid(SkeletalMesh))
+	{
+		OriginalSkeletalMeshTransform = SkeletalMesh->GetRelativeTransform();
+	}
+	
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	// UpdateAllPredictions(DeltaTime);
+	ResyncMeshOffset(DeltaTime);
 	
 	// Ragdoll nonsense.
 	if (bResetMesh && IsValid(SkeletalMesh))
@@ -413,7 +422,7 @@ void UGMCE_OrganicMovementCmp::PreMovementUpdate_Implementation(float DeltaSecon
 {
 	Super::PreMovementUpdate_Implementation(DeltaSeconds);
 	
-	RunSolvers(DeltaSeconds);	
+	RunSolvers(DeltaSeconds);
 }
 
 void UGMCE_OrganicMovementCmp::PreSimulatedMoveExecution_Implementation(const FGMC_PawnState& InputState,
@@ -508,6 +517,7 @@ bool UGMCE_OrganicMovementCmp::UpdateMovementModeDynamic_Implementation(FGMC_Flo
 	if (GetMovementMode() == GetSolverMovementMode())
 	{
 		LeaveSolverMode();
+		return true;
 	}
 	
 	return Super::UpdateMovementModeDynamic_Implementation(Floor, DeltaSeconds);
@@ -543,6 +553,7 @@ void UGMCE_OrganicMovementCmp::OnMovementModeChangedSimulated_Implementation(EGM
 
 void UGMCE_OrganicMovementCmp::PostMovementUpdate_Implementation(float DeltaSeconds)
 {
+	bWantsSkeletalMeshOffsetReset = bHasRootMotion && !AccumulatedSmoothRootMotionTransform.Equals(FTransform::Identity);
 	Super::PostMovementUpdate_Implementation(DeltaSeconds);
 }
 
@@ -882,7 +893,53 @@ void UGMCE_OrganicMovementCmp::OnMontageStarted(UAnimMontage* Montage, float Pos
                                                 bool bInterrupted, float DeltaSeconds)
 {
 	PreviousMontagePosition = Position;
+	AccumulatedSmoothRootMotionTransform = GetActorTransform_GMC();
+	PreviousSmoothRootMotionTransform = AccumulatedSmoothRootMotionTransform;
+	PreviousMeshSmoothTargetLocation = SkeletalMesh->GetComponentLocation() - SkeletalMesh->GetRelativeLocation();
+	PreviousMeshSmoothActorLocation = GetActorLocation_GMC();
+	bWantsSkeletalMeshOffsetReset = false;
 	Super::OnMontageStarted(Montage, Position, PlayRate, bInterrupted, DeltaSeconds);
+}
+
+void UGMCE_OrganicMovementCmp::OnMontageCompleted(UAnimMontage* Montage, float Position, float PlayRate,
+	float DeltaSeconds)
+{
+	GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("OnMontageCompleted: %s"), *Montage->GetName())
+	bWantsSkeletalMeshOffsetReset = true;
+	Super::OnMontageCompleted(Montage, Position, PlayRate, DeltaSeconds);
+}
+
+void UGMCE_OrganicMovementCmp::OnMontageStopped(UAnimMontage* Montage)
+{
+	GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("OnMontageStopped: %s"), *Montage->GetName())
+	bWantsSkeletalMeshOffsetReset = true;
+}
+
+void UGMCE_OrganicMovementCmp::StopMontageWithDelegate(USkeletalMeshComponent* Mesh,
+                                                       FGMC_MontageTracker& InMontageTracker, float BlendOutTime, bool bWhenExtrapolating, bool bViaServer)
+{
+	if (!MontageTracker.HasActiveMontage() || (IsExtrapolating() && !bWhenExtrapolating))
+	{
+		return;
+	}
+
+	if (bViaServer && !GetPawnOwner()->HasAuthority())
+	{
+		SV_StopMontageWithDelegate(Mesh, BlendOutTime, bWhenExtrapolating);
+	}
+	
+	OnMontageStopped(MontageTracker.Montage);
+	if (OnMontageStoppedDelegate.IsBound())
+	{
+		OnMontageStoppedDelegate.Execute();
+	}
+	Super::StopMontage(Mesh, InMontageTracker, BlendOutTime, bWhenExtrapolating);
+	
+}
+
+void UGMCE_OrganicMovementCmp::SV_StopMontageWithDelegate_Implementation(USkeletalMeshComponent* Mesh, float BlendOutTime, bool bWhenExtrapolating)
+{
+	StopMontageWithDelegate(Mesh, MontageTracker, BlendOutTime, bWhenExtrapolating, false);
 }
 
 FString UGMCE_OrganicMovementCmp::GetComponentDescription()
@@ -917,9 +974,27 @@ void UGMCE_OrganicMovementCmp::PreProcessRootMotion(const FGMC_AnimMontageInstan
 	// handle motion warping.
 	if (ProcessRootMotionPreConvertToWorld.IsBound())
 	{
-		const FTransform MeshRelativeTransform = SkeletalMesh->GetRelativeTransform();
+		if (bUseRootMotionSmoothing && AccumulatedSmoothRootMotionTransform.Equals(FTransform::Identity))
+		{
+			AccumulatedSmoothRootMotionTransform = GetActorTransform_GMC();
+			PreviousSmoothRootMotionTransform = GetActorTransform_GMC();
+			PreviousMeshSmoothTargetLocation = SkeletalMesh->GetComponentLocation() - SkeletalMesh->GetRelativeLocation();
+		}
 		
-		InOutRootMotionParams.Set(ProcessRootMotionPreConvertToWorld.Execute(InOutRootMotionParams.GetRootMotionTransform(), GetActorTransform_GMC(), MeshRelativeTransform, this, DeltaSeconds));
+		const FTransform MeshRelativeTransform = SkeletalMesh->GetRelativeTransform();
+		const FTransform& OriginalRootMotionTransform = InOutRootMotionParams.GetRootMotionTransform();
+		
+		InOutRootMotionParams.Set(ProcessRootMotionPreConvertToWorld.Execute(OriginalRootMotionTransform, GetActorTransform_GMC(), MeshRelativeTransform, this, DeltaSeconds));
+
+		if (bUseRootMotionSmoothing)
+		{
+			// Execute a second time to determine our "smoothed" path.
+			PreviousSmoothRootMotionTransform = AccumulatedSmoothRootMotionTransform;
+			FTransform NewTransform = ProcessRootMotionPreConvertToWorld.Execute(OriginalRootMotionTransform, AccumulatedSmoothRootMotionTransform, OriginalSkeletalMeshTransform, this, DeltaSeconds);
+			NewTransform.ScaleTranslation(GetAnimRootMotionTranslationScale());
+			NewTransform = SkeletalMesh->ConvertLocalRootMotionToWorld(NewTransform);
+			AccumulatedSmoothRootMotionTransform.Accumulate(NewTransform);
+		}
 	}
 
 	Super::PreProcessRootMotion(MontageInstance, InOutRootMotionParams, DeltaSeconds);
@@ -971,6 +1046,68 @@ float UGMCE_OrganicMovementCmp::GetMaxPredictionSpeed(const FVector& InputVector
 	// Calculate the modified max speed.
 	gmc_ck(MaxDesiredSpeed >= MinAnalogWalkSpeed)
 	return FMath::Clamp(InputVector.Length() * MaxDesiredSpeed, MinAnalogWalkSpeed, BIG_NUMBER);	
+}
+
+void UGMCE_OrganicMovementCmp::ResyncMeshOffset(float DeltaSeconds)
+{
+	if (!IsValid(SkeletalMesh) || !bUseRootMotionSmoothing) return;
+
+	const bool bActiveMontage = HasActiveRootMotionMontage(MontageTracker);
+
+	SV_SwapServerState();
+	if (!AccumulatedSmoothRootMotionTransform.Equals(FTransform::Identity) && !bWantsSkeletalMeshOffsetReset && bActiveMontage)
+	{
+		const FVector ActorLocation = GetActorLocation_GMC();
+		const FVector LastLocation = PreviousMeshSmoothTargetLocation;
+		FVector TargetLocation = AccumulatedSmoothRootMotionTransform.GetLocation();
+
+		FVector WorldDelta = TargetLocation - LastLocation;
+		if (WorldDelta.Length() >= 2.f)
+		{
+			TargetLocation = FMath::Lerp(LastLocation, TargetLocation, DeltaSeconds * RootMotionSmoothingSpeed);
+		}
+
+		DrawDebugLine(GetWorld(), PreviousMeshSmoothTargetLocation, TargetLocation, GetPawnOwner()->IsLocallyControlled() ? FColor::Yellow : FColor::Purple, false, 2., 0, 2.f);
+		DrawDebugLine(GetWorld(), AccumulatedSmoothRootMotionTransform.GetLocation(), TargetLocation, FColor::Red, false, 2., 0, 1.f);
+		DrawDebugLine(GetWorld(), PreviousMeshSmoothActorLocation, ActorLocation, FColor::Orange, false, 2., 0, 1.f);
+		DrawDebugPoint(GetWorld(), AccumulatedSmoothRootMotionTransform.GetLocation(), 3.f, FColor::Red, false, 2., 0);
+		
+		PreviousMeshSmoothTargetLocation = TargetLocation;
+		PreviousMeshSmoothActorLocation = ActorLocation;
+		
+		FVector Offset = ActorLocation - TargetLocation;
+		Offset += OriginalSkeletalMeshTransform.GetLocation();
+
+		SkeletalMesh->SetRelativeLocation(Offset);
+	}
+	else if (bWantsSkeletalMeshOffsetReset && !AccumulatedSmoothRootMotionTransform.Equals(FTransform::Identity))
+	{
+		FVector TargetLocation = GetActorLocation_GMC();
+		const FVector WorldDelta = TargetLocation - PreviousMeshSmoothTargetLocation;
+
+		if (WorldDelta.Length() <= 5.f)
+		{
+			SkeletalMesh->SetRelativeTransform(OriginalSkeletalMeshTransform);
+			bWantsSkeletalMeshOffsetReset = false;
+			AccumulatedSmoothRootMotionTransform = FTransform::Identity;
+			PreviousSmoothRootMotionTransform = FTransform::Identity;
+			PreviousMeshSmoothTargetLocation = FVector::ZeroVector;
+		}
+		else
+		{
+			TargetLocation = FMath::Lerp(PreviousMeshSmoothTargetLocation, TargetLocation, DeltaSeconds * RootMotionSmoothingSpeed);
+			DrawDebugLine(GetWorld(), PreviousMeshSmoothTargetLocation, TargetLocation, FColor::Blue, false, 2., 0, 2.f);
+			DrawDebugLine(GetWorld(), GetActorLocation_GMC(), TargetLocation, FColor::Red, false, 2., 0, 1.f);
+			DrawDebugPoint(GetWorld(), GetActorLocation_GMC(), 3.f, FColor::Red, false, 2., 0);
+
+			PreviousMeshSmoothTargetLocation = TargetLocation;
+			FVector Offset = TargetLocation - PreviousMeshSmoothTargetLocation;
+
+			Offset += OriginalSkeletalMeshTransform.GetLocation();
+			SkeletalMesh->SetRelativeLocation(Offset);			
+		}
+	}
+	SV_SwapServerState();
 }
 
 #pragma endregion

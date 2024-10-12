@@ -19,6 +19,7 @@ void UGMCE_BaseSolver::SetupSolverInternal(UGMCE_OrganicMovementCmp* InMovementC
 	Delegate_OnMontageBlendInComplete.BindUObject(this, &UGMCE_BaseSolver::OnMontageBlendInDone_Networked_Internal);
 	Delegate_OnMontageBlendOutBegin.BindUObject(this, &UGMCE_BaseSolver::OnMontageBlendOutBegin_Networked_Internal);
 	Delegate_OnMontageComplete.BindUObject(this, &UGMCE_BaseSolver::OnMontageComplete_Networked_Internal);
+	Delegate_OnMontageStopped.BindUObject(this, &UGMCE_BaseSolver::OnMontageStopped_Networked_Internal);
 
 	Delegate_OnMontageStarted_Cosmetic.BindUObject(this, &UGMCE_BaseSolver::OnMontageStarted_Cosmetic_Internal);
 	Delegate_OnMontageBlendedInEnded_Cosmetic.BindUObject(this, &UGMCE_BaseSolver::OnMontageBlendInDone_Cosmetic_Internal);
@@ -492,19 +493,6 @@ bool UGMCE_BaseSolver::PlayMontage(USkeletalMeshComponent* SkeletalMeshComponent
 	float StartPosition, float PlayRate, bool bBlocking, bool bRouteThroughServer)
 {
 
-	MovementComponent->SetMontageStartDelegate(Delegate_OnMontageStart, MovementComponent->MontageTracker);
-	MovementComponent->SetMontageBlendInDelegate(Delegate_OnMontageBlendInComplete, MovementComponent->MontageTracker);
-	MovementComponent->SetMontageBlendOutDelegate(Delegate_OnMontageBlendOutBegin, MovementComponent->MontageTracker);
-	MovementComponent->SetMontageCompleteDelegate(Delegate_OnMontageComplete, MovementComponent->MontageTracker);
-
-	UAnimInstance* AnimInstance = SkeletalMeshComponent->GetAnimInstance();
-	if (IsValid(AnimInstance))
-	{
-		AnimInstance->Montage_SetBlendedInDelegate(Delegate_OnMontageBlendedInEnded_Cosmetic, Montage);
-		AnimInstance->Montage_SetBlendingOutDelegate(Delegate_OnMontageBlendingOutStarted_Cosmetic, Montage);
-		AnimInstance->Montage_SetEndDelegate(Delegate_OnMontageEnded_Cosmetic, Montage);
-	}
-	
 	if (bRouteThroughServer && !MovementComponent->GetPawnOwner()->HasAuthority())
 	{
 		SV_PlayMontage_Implementation(SkeletalMeshComponent, Montage, StartPosition, PlayRate, bBlocking);
@@ -525,12 +513,46 @@ void UGMCE_BaseSolver::PlayMontage_Internal(USkeletalMeshComponent* SkeletalMesh
 	{
 		MovementComponent->PlayMontage_NonBlocking(SkeletalMeshComponent, MovementComponent->MontageTracker, Montage, StartPosition, PlayRate);
 	}
+
+	MovementComponent->SetMontageStartDelegate(Delegate_OnMontageStart, MovementComponent->MontageTracker);
+	MovementComponent->SetMontageBlendInDelegate(Delegate_OnMontageBlendInComplete, MovementComponent->MontageTracker);
+	MovementComponent->SetMontageBlendOutDelegate(Delegate_OnMontageBlendOutBegin, MovementComponent->MontageTracker);
+	MovementComponent->SetMontageCompleteDelegate(Delegate_OnMontageComplete, MovementComponent->MontageTracker);
+	MovementComponent->OnMontageStoppedDelegate = Delegate_OnMontageStopped;
+
+	UAnimInstance* AnimInstance = SkeletalMeshComponent->GetAnimInstance();
+	if (IsValid(AnimInstance))
+	{
+		AnimInstance->Montage_SetBlendedInDelegate(Delegate_OnMontageBlendedInEnded_Cosmetic, Montage);
+		AnimInstance->Montage_SetBlendingOutDelegate(Delegate_OnMontageBlendingOutStarted_Cosmetic, Montage);
+		AnimInstance->Montage_SetEndDelegate(Delegate_OnMontageEnded_Cosmetic, Montage);
+	}
 }
 
 void UGMCE_BaseSolver::SV_PlayMontage_Implementation(USkeletalMeshComponent* SkeletalMeshComponent,
                                                      UAnimMontage* Montage, float StartPosition, float PlayRate, bool bBlocking)
 {
 	PlayMontage_Internal(SkeletalMeshComponent, Montage, StartPosition, PlayRate, bBlocking);
+}
+
+void UGMCE_BaseSolver::MC_MarkMontageInterrupted_Implementation(UAnimMontage* Montage)
+{
+	SolverLogString(FString::Printf(TEXT("OnMontageInterrupted (networked): %s"),
+		*Montage->GetName()),
+		EGMCExtendedLogType::LogVeryVerbose, false);
+	OnMontageInterrupted(Montage, true);
+}
+
+void UGMCE_BaseSolver::SV_MarkMontageInterrupted_Implementation(UAnimMontage* Montage)
+{
+	SolverLogString(FString::Printf(TEXT("OnMontageInterrupted (networked, server): %s"),
+		*Montage->GetName()),
+		EGMCExtendedLogType::LogVeryVerbose, false);
+	OnMontageInterrupted(Montage, true);	
+}
+
+void UGMCE_BaseSolver::OnMontageStopped_Implementation(UAnimMontage* Montage, bool bNetworked)
+{
 }
 
 void UGMCE_BaseSolver::OnMontageStart_Networked_Internal()
@@ -540,6 +562,7 @@ void UGMCE_BaseSolver::OnMontageStart_Networked_Internal()
 		EGMCExtendedLogType::LogVeryVerbose, false);
 	OnMontageStart(MovementComponent->MontageTracker.Montage, true);
 	bHasPlayedMontage = true;
+	bWasInterruptedBeforeComplete = false;
 }
 
 void UGMCE_BaseSolver::OnMontageBlendInDone_Networked_Internal()
@@ -566,6 +589,14 @@ void UGMCE_BaseSolver::OnMontageComplete_Networked_Internal()
 	OnMontageComplete(MovementComponent->MontageTracker.Montage, true);
 	bWasInterruptedBeforeComplete = false;
 	bHasPlayedMontage = false;
+}
+
+void UGMCE_BaseSolver::OnMontageStopped_Networked_Internal()
+{
+	SolverLogString(FString::Printf(TEXT("OnMontageStopped (networked): %s"),
+		*MovementComponent->MontageTracker.Montage->GetName()),
+		EGMCExtendedLogType::LogVeryVerbose, false);
+	OnMontageStopped(MovementComponent->MontageTracker.Montage, true);
 }
 
 void UGMCE_BaseSolver::OnMontageStarted_Cosmetic_Internal(UAnimMontage* Montage)
@@ -600,6 +631,8 @@ void UGMCE_BaseSolver::OnMontageBlendOutBegin_Cosmetic_Internal(UAnimMontage* Mo
 			EGMCExtendedLogType::LogVeryVerbose, false);
 		OnMontageInterrupted(Montage, false);
 		bWasInterruptedBeforeComplete = true;
+		MC_MarkMontageInterrupted(Montage);
+		SV_MarkMontageInterrupted(Montage);
 	}
 }
 
@@ -619,6 +652,8 @@ void UGMCE_BaseSolver::OnMontageComplete_Cosmetic_Internal(UAnimMontage* Montage
 			EGMCExtendedLogType::LogVeryVerbose, false);
 		OnMontageInterrupted(Montage, false);
 		bWasInterruptedBeforeComplete = true;
+		MC_MarkMontageInterrupted(Montage);
+		SV_MarkMontageInterrupted(Montage);
 	}
 }
 

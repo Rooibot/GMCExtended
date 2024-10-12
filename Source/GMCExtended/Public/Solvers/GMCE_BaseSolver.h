@@ -3,7 +3,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GMCE_OrganicMovementCmp.h"
 #include "UObject/Object.h"
+#include "GMCE_SolverTypes.h"
 #include "GMCOrganicMovementComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "GMCE_BaseSolver.generated.h"
@@ -11,53 +13,6 @@
 class UGMCE_OrganicMovementCmp;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogGMCExtendedSolver, Log, All)
-
-UENUM(BlueprintType)
-enum class EGMCExtendedLogType : uint8
-{
-	DebugLog UMETA(DisplayName = "Debug Only Log"),
-	LogVeryVerbose UMETA(DisplayName = "Very Verbose Log"),
-	LogVerbose UMETA(DisplayName = "Verbose Log"),
-	LogWarning UMETA(DisplayName = "Warning Log"),
-	LogError UMETA(DisplayName = "Error Log")
-};
-
-USTRUCT(BlueprintType)
-struct GMCEXTENDED_API FSolverState
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
-	bool bIsPrediction { false };
-	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
-	EGMC_MovementMode MovementMode { EGMC_MovementMode::Grounded };
-	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
-	FGameplayTag MovementTag { FGameplayTag::EmptyTag };
-	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
-	FVector Location { 0.f };
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
-	FRotator Rotation { 0.f };
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
-	FVector LinearVelocity { 0.f };
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
-	FVector RawInput { 0.f };
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
-	FVector ProcessedInput { 0.f };
-
-	// -- Values below here can be changed by a solver and will be acted on.
-	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Solver State")
-	FGameplayTagContainer AvailableSolvers { };
-	
-};
-
 
 /**
  * 
@@ -651,7 +606,16 @@ public:
 	void OnMontageComplete(UAnimMontage* Montage, bool bNetworked);
 
 	UFUNCTION(BlueprintNativeEvent)
-	void OnMontageInterrupted(UAnimMontage* MontageHandle, bool bNetworked);
+	void OnMontageInterrupted(UAnimMontage* Montage, bool bNetworked);
+
+	UFUNCTION(BlueprintNativeEvent)
+	void OnMontageStopped(UAnimMontage* Montage, bool bNetworked);
+
+	UFUNCTION(NetMulticast, reliable)
+	void MC_MarkMontageInterrupted(UAnimMontage* Montage);
+
+	UFUNCTION(Server, reliable)
+	void SV_MarkMontageInterrupted(UAnimMontage* Montage);
 
 protected:
 
@@ -666,6 +630,9 @@ protected:
 
 	UFUNCTION()
 	void OnMontageComplete_Networked_Internal();
+
+	UFUNCTION()
+	void OnMontageStopped_Networked_Internal();
 
 	UFUNCTION()
 	void OnMontageStarted_Cosmetic_Internal(UAnimMontage* Montage);
@@ -686,6 +653,7 @@ protected:
 	FGMC_OnMontageBlendInComplete			Delegate_OnMontageBlendInComplete;
 	FGMC_OnMontageBlendOutBegin				Delegate_OnMontageBlendOutBegin;
 	FGMC_OnMontageComplete					Delegate_OnMontageComplete;
+	FGMCE_OnMontageStopped					Delegate_OnMontageStopped;
 
 	FOnMontageStarted						Delegate_OnMontageStarted_Cosmetic;
 	FOnMontageBlendedInEnded				Delegate_OnMontageBlendedInEnded_Cosmetic;
