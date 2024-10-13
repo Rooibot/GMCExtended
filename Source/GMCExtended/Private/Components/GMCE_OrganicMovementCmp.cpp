@@ -1773,7 +1773,6 @@ void UGMCE_OrganicMovementCmp::LeaveSolverMode()
 	FHitResult HitCheck;
 	FCollisionQueryParams CollisionQueryParams(NAME_None, false, GetOwner());
 	CollisionQueryParams.AddIgnoredActors(UpdatedPrimitive->GetMoveIgnoreActors());
-	CollisionQueryParams.AddIgnoredComponents(UpdatedPrimitive->GetMoveIgnoreComponents());
 	GetWorld()->LineTraceSingleByChannel(HitCheck, GetLowerBound() + FVector(0.f, 0.f, MaxStepUpHeight),
 										 GetLowerBound() - FVector(0.f, 0.f, MaxStepDownHeight),
 										 ECC_Pawn, FCollisionQueryParams(NAME_None, true, GetOwner()));

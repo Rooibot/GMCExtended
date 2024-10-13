@@ -23,4 +23,6 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void TestGeneratePath(AGMC_Pawn* Pawn, UAnimMontage* Montage, float StartPosition, float PlayRate);
+
+	
 };

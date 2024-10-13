@@ -18,7 +18,14 @@ bool UGMCE_RootMotionPathHolder::GeneratePathForMontage(UGMCE_MotionWarpingCompo
 	FTransform PreviousWorldTransform = InContext.OwnerTransform;
 
 	const float SampleSize = (Montage->GetPlayLength() / (Montage->GetNumberOfSampledKeys() * 2.f)) / InContext.PlayRate;
+	int32 NumSamples = static_cast<int32>((Montage->GetPlayLength() - InContext.CurrentPosition) / SampleSize) + 1;
 	float CurrentTime = InContext.CurrentPosition;
+
+	float PredictionTime = 0.f;
+	float LastSample = 0.f;
+
+	FGMCE_MovementSampleCollection PredictionSamples;
+	PredictionSamples.Samples.Reserve(NumSamples);
 
 	while (CurrentTime < Montage->GetPlayLength())
 	{
@@ -32,6 +39,8 @@ bool UGMCE_RootMotionPathHolder::GeneratePathForMontage(UGMCE_MotionWarpingCompo
 		WarpContext.DeltaSeconds = CurrentTime - PreviousTimestamp;
 		WarpContext.OwnerTransform = CurrentWorldTransform;
 		const FTransform NewMovement = WarpingComponent->ProcessRootMotionFromContext(RawMovement, WarpContext);
+
+		PredictionTime += WarpContext.DeltaSeconds;
 
 		//Calculate new actor transform after applying root motion to this component
 		const FTransform ActorToWorld = CurrentWorldTransform;
@@ -50,14 +59,27 @@ bool UGMCE_RootMotionPathHolder::GeneratePathForMontage(UGMCE_MotionWarpingCompo
 		
 		CurrentWorldTransform.Accumulate(DeltaWorldTransform);
 
-		const FVector LineStart = PreviousWorldTransform.GetLocation() + WarpContext.MeshRelativeTransform.GetTranslation();
-		const FVector LineEnd = CurrentWorldTransform.GetLocation() + WarpContext.MeshRelativeTransform.GetTranslation();
-		
-		DrawDebugLine(WarpingComponent->GetWorld(), LineStart, LineEnd, FColor::Yellow, false, 2.f, 0, 1.f);
+		FTransform FlattenedTransform = CurrentWorldTransform;
+		FlattenedTransform.SetTranslation(FlattenedTransform.GetTranslation() + InContext.MeshRelativeTransform.GetTranslation());
+
+		if (PredictionTime - LastSample > 0.01f)
+		{
+			FGMCE_MovementSample NewSample;
+			NewSample.AccumulatedSeconds = PredictionTime;
+			NewSample.WorldTransform = FlattenedTransform;
+			NewSample.WorldLinearVelocity = (CurrentWorldTransform.GetLocation() - PreviousWorldTransform.GetLocation()) / (PredictionTime - LastSample);
+			NewSample.ActorWorldRotation = CurrentWorldTransform.GetRotation().Rotator();
+			NewSample.ActorWorldTransform = CurrentWorldTransform;
+
+			PredictionSamples.Samples.Add(NewSample);
+			LastSample = PredictionTime;
+		}
 
 		PreviousTimestamp = CurrentTime;
 		PreviousWorldTransform = CurrentWorldTransform;
 	}
+
+	PredictionSamples.DrawDebug(WarpingComponent->GetWorld(), InContext.OwnerTransform, FColor::Red, FColor::White, FColor::Purple, 0, Montage->GetPlayLength() - InContext.CurrentPosition);
 	
 	return false;
 }
@@ -67,11 +89,15 @@ void UGMCE_RootMotionPathHolder::TestGeneratePath(AGMC_Pawn* Pawn, UAnimMontage*
 {
 	IGMCE_MotionWarpSubject* WarpingSubject = Cast<IGMCE_MotionWarpSubject>(Pawn);
 	UGMCE_OrganicMovementCmp* MovementComponent = WarpingSubject->GetGMCExMovementComponent();
+
+	FTransform InitialTransform = MovementComponent->GetActorTransform_GMC();
+	// FRotator CurrentMeshRotation = MovementComponent->GetSkeletalMeshReference()->GetRelativeRotation();
+	// InitialTransform.SetRotation((CurrentMeshRotation + FRotator(0.f, 90.f, 0.f)).Quaternion());
 	
 	FGMCE_MotionWarpContext WarpContext;
 	WarpContext.Animation = Montage;
-	WarpContext.OwnerTransform = MovementComponent->GetActorTransform_GMC();
-	WarpContext.MeshRelativeTransform = MovementComponent->GetSkeletalMeshReference()->GetRelativeTransform();
+	WarpContext.OwnerTransform = InitialTransform;
+	WarpContext.MeshRelativeTransform = FTransform(WarpingSubject->MotionWarping_GetRotationOffset(), WarpingSubject->MotionWarping_GetTranslationOffset());
 	WarpContext.AnimationInstance = MovementComponent->GetSkeletalMeshReference()->GetAnimInstance();
 	WarpContext.PlayRate = PlayRate;
 	WarpContext.CurrentPosition = StartPosition;
