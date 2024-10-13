@@ -45,6 +45,8 @@ struct GMCEXTENDEDANIMATION_API FGMCE_MotionWarpTarget
 
 	FTransform GetTargetTransform() const;
 
+	FTransform GetTargetTransformFromAnimation(const FTransform& Origin, const FTransform& ComponentRelative, const UAnimSequenceBase* Animation, float Timestamp) const;
+
 	FORCEINLINE FVector GetLocation() const { return GetTargetTransform().GetLocation(); }
 	FORCEINLINE FQuat GetRotation() const { return GetTargetTransform().GetRotation(); }
 	FORCEINLINE FRotator Rotator() const { return GetTargetTransform().Rotator(); }
@@ -60,6 +62,8 @@ struct GMCEXTENDEDANIMATION_API FGMCE_MotionWarpTarget
 	}
 
 	static FTransform GetTargetTransformFromComponent(const USceneComponent* Comp, const FName& BoneName);
+
+	static FTransform GetTargetTransformFromAnimation(const UAnimSequenceBase* Animation, float Timestamp, const FName& BoneName, const FTransform& ComponentToWorld);
 
 	FString ToString() const
 	{

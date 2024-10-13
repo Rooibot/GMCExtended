@@ -28,7 +28,6 @@ void UGMCE_MovementAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 			{
 				ComponentYawScale = YawAbsolute / 180.f;
 			}
-			UE_LOG(LogGMCExAnimation, Log, TEXT("[%s] yaw scale: %f (from %f)"), *GetNetRoleAsString(GetOwningActor()->GetLocalRole()), ComponentYawScale, YawAbsolute)
 		}
 	}
 	else

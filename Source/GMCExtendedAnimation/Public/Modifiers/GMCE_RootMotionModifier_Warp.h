@@ -85,10 +85,10 @@ public:
 	virtual void OnTargetTransformChanged();
 
 	FORCEINLINE FVector GetTargetLocation() const { return CachedTargetTransform.GetLocation(); }
-	FORCEINLINE FRotator GetTargetRotator() const { return GetTargetRotation().Rotator(); }
-	FQuat GetTargetRotation() const;
+	FORCEINLINE FRotator GetTargetRotator(const FGMCE_MotionWarpContext& WarpContext) const { return GetTargetRotation(WarpContext).Rotator(); }
+	FQuat GetTargetRotation(const FGMCE_MotionWarpContext& WarpContext) const;
 
-	FQuat WarpRotation(const FTransform& RootMotionDelta, const FTransform& RootMotionTotal, float DeltaSeconds);
+	FQuat WarpRotation(const FGMCE_MotionWarpContext& WarpContext, const FTransform& RootMotionDelta, const FTransform& RootMotionTotal, float DeltaSeconds);
 
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	void PrintLog(const FString& Name, const FTransform& OriginalRootMotion, const FTransform& WarpedRootMotion) const;

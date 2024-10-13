@@ -124,23 +124,17 @@ UGMCE_RootMotionModifier* UGMCE_MotionWarpingComponent::AddModifierFromTemplate(
 
 void UGMCE_MotionWarpingComponent::Update(FGMCE_MotionWarpContext& WarpContext)
 {
-	AGMC_Pawn* Pawn = GetOwningPawn();
-	check(Pawn);
-
 	UGMCE_OrganicMovementCmp *Component = GetMovementComponent();
 	FGMC_MontageTracker& Tracker = Component->MontageTracker;
 	check(Component);
 
-	if (FAnimMontageInstance* RootMotionMontageInstance = MotionWarpSubject->GetRootMotionAnimMontageInstance(MotionWarpSubject->MotionWarping_GetMeshComponent()))
+	FAnimMontageInstance* RootMotionMontageInstance = WarpContext.AnimationInstance->GetRootMotionMontageInstance();
+	
+	if (WarpContext.Animation.IsValid() || RootMotionMontageInstance)
 	{
-		const UAnimMontage* Montage = RootMotionMontageInstance->Montage;
-		check(Montage);
-
-		WarpContext.Animation = Montage;
-
 		if (WarpContext.Weight == 0.f)
 		{
-			WarpContext.Weight = RootMotionMontageInstance->GetWeight();
+			WarpContext.Weight = RootMotionMontageInstance ? RootMotionMontageInstance->GetWeight() : 1.f;
 		}
 		if (WarpContext.CapsuleHalfHeight == 0.f)
 		{
@@ -164,9 +158,6 @@ void UGMCE_MotionWarpingComponent::Update(FGMCE_MotionWarpContext& WarpContext)
 			}
 		}
 		
-		UE_LOG(LogGMCExAnimation, VeryVerbose, TEXT("[%s] get transform %f -> %f"),
-			*MovementComponent->GetComponentDescription(), WarpContext.PreviousPosition, WarpContext.CurrentPosition)
-
 		const float ExpectedDelta = WarpContext.DeltaSeconds * WarpContext.PlayRate;
 		const float ActualDelta = WarpContext.CurrentPosition - WarpContext.PreviousPosition;
 
@@ -372,6 +363,8 @@ FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InT
 	WarpContext.DeltaSeconds = DeltaSeconds;
 	WarpContext.OwnerTransform = ActorTransform;
 	WarpContext.MeshRelativeTransform = MeshRelativeTransform;
+	WarpContext.AnimationInstance = GMCMovementComponent->GetSkeletalMeshReference()->GetAnimInstance();
+	WarpContext.Animation = GMCMovementComponent->MontageTracker.Montage;
 
 	FTransform FinalRootMotion = ProcessRootMotionFromContext(InTransform, WarpContext);
 

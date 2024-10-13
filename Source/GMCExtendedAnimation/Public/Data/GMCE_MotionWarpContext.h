@@ -34,6 +34,9 @@ struct GMCEXTENDEDANIMATION_API FGMCE_MotionWarpContext
 	FTransform MeshRelativeTransform { FTransform::Identity };
 
 	UPROPERTY()
+	UAnimInstance* AnimationInstance { nullptr };
+
+	UPROPERTY()
 	float CapsuleHalfHeight { 0.f };
 	
 };

@@ -14,28 +14,29 @@ bool UGMCE_RootMotionPathHolder::GeneratePathForMontage(UGMCE_MotionWarpingCompo
 	// FTransform FinalTransform = UGMCE_MotionWarpingUtilities::ExtractRootTransformFromAnimation(Montage, InContext.CurrentPosition);
 
 	float PreviousTimestamp = InContext.CurrentPosition;
-	FTransform LastWorldTransform = InContext.OwnerTransform;
+	FTransform CurrentWorldTransform = InContext.OwnerTransform;
+	FTransform PreviousWorldTransform = InContext.OwnerTransform;
 
-	UE_LOG(LogGMCExAnimation, Log, TEXT("Starting at %s"), *LastWorldTransform.GetLocation().ToCompactString())
-	
-	for(int32 Idx = 1; Idx < Montage->GetNumberOfSampledKeys(); Idx++)
+	const float SampleSize = (Montage->GetPlayLength() / (Montage->GetNumberOfSampledKeys() * 2.f)) / InContext.PlayRate;
+	float CurrentTime = InContext.CurrentPosition;
+
+	while (CurrentTime < Montage->GetPlayLength())
 	{
-		float CurrentTime = Montage->GetTimeAtFrame(Idx);
-		if (CurrentTime < PreviousTimestamp) continue;
-
-		FTransform NewMovement = UGMCE_MotionWarpingUtilities::ExtractRootMotionFromAnimation(Montage, PreviousTimestamp, CurrentTime);
+		CurrentTime = FMath::Min(CurrentTime + SampleSize, Montage->GetPlayLength());
+		
+		const FTransform RawMovement = UGMCE_MotionWarpingUtilities::ExtractRootMotionFromAnimation(Montage, PreviousTimestamp, CurrentTime);
 
 		FGMCE_MotionWarpContext WarpContext = InContext;
 		WarpContext.CurrentPosition = CurrentTime;
 		WarpContext.PreviousPosition = PreviousTimestamp;
 		WarpContext.DeltaSeconds = CurrentTime - PreviousTimestamp;
-		WarpContext.OwnerTransform = LastWorldTransform;
-		NewMovement = WarpingComponent->ProcessRootMotionFromContext(NewMovement, WarpContext);
- 
+		WarpContext.OwnerTransform = CurrentWorldTransform;
+		const FTransform NewMovement = WarpingComponent->ProcessRootMotionFromContext(RawMovement, WarpContext);
+
 		//Calculate new actor transform after applying root motion to this component
-		const FTransform ActorToWorld = LastWorldTransform;
-		const FTransform ComponentTransform = WarpContext.MeshRelativeTransform * ActorToWorld;
-		const FTransform ComponentToActor = ActorToWorld.GetRelativeTransform(ComponentTransform);
+		const FTransform ActorToWorld = CurrentWorldTransform;
+		const FTransform ComponentTransform = FTransform(InContext.MeshRelativeTransform.GetRotation().Rotator(), InContext.MeshRelativeTransform.GetTranslation()) * ActorToWorld;
+		const FTransform ComponentToActor = InContext.MeshRelativeTransform.Inverse();
 
 		const FTransform NewComponentToWorld = NewMovement * ComponentTransform;
 		const FTransform NewActorTransform = ComponentToActor * NewComponentToWorld;
@@ -47,12 +48,15 @@ bool UGMCE_RootMotionPathHolder::GeneratePathForMontage(UGMCE_MotionWarpingCompo
 	
 		const FTransform DeltaWorldTransform(DeltaWorldRotation, DeltaWorldTranslation);
 		
-		LastWorldTransform.Accumulate(DeltaWorldTransform);
-		DrawDebugSphere(WarpingComponent->GetWorld(), LastWorldTransform.GetLocation(), 10, 8, FColor::Yellow, false, 2.f, 0, 1.f);
-		UE_LOG(LogGMCExAnimation, Log, TEXT("Warped location: [%f - %f] %s -> %s"),
-			PreviousTimestamp, CurrentTime, *DeltaWorldTransform.GetTranslation().ToCompactString(),
-			*LastWorldTransform.GetLocation().ToCompactString())
+		CurrentWorldTransform.Accumulate(DeltaWorldTransform);
+
+		const FVector LineStart = PreviousWorldTransform.GetLocation() + WarpContext.MeshRelativeTransform.GetTranslation();
+		const FVector LineEnd = CurrentWorldTransform.GetLocation() + WarpContext.MeshRelativeTransform.GetTranslation();
+		
+		DrawDebugLine(WarpingComponent->GetWorld(), LineStart, LineEnd, FColor::Yellow, false, 2.f, 0, 1.f);
+
 		PreviousTimestamp = CurrentTime;
+		PreviousWorldTransform = CurrentWorldTransform;
 	}
 	
 	return false;
@@ -68,6 +72,7 @@ void UGMCE_RootMotionPathHolder::TestGeneratePath(AGMC_Pawn* Pawn, UAnimMontage*
 	WarpContext.Animation = Montage;
 	WarpContext.OwnerTransform = MovementComponent->GetActorTransform_GMC();
 	WarpContext.MeshRelativeTransform = MovementComponent->GetSkeletalMeshReference()->GetRelativeTransform();
+	WarpContext.AnimationInstance = MovementComponent->GetSkeletalMeshReference()->GetAnimInstance();
 	WarpContext.PlayRate = PlayRate;
 	WarpContext.CurrentPosition = StartPosition;
 	WarpContext.PreviousPosition = StartPosition;
