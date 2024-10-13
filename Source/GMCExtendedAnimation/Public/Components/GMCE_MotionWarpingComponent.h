@@ -189,6 +189,12 @@ public:
 	UGMCE_RootMotionModifier* AddModifierFromTemplate(UGMCE_RootMotionModifier* Template, const UAnimSequenceBase* Animation, float StartTime, float EndTime);
 
 	const FGMCE_MotionWarpTargetContainer& GetWarpTargets() const { return WarpTargetContainerInstance.Get<FGMCE_MotionWarpTargetContainer>(); }
+
+	UFUNCTION(BlueprintCallable)
+	TArray<FGMCE_MotionWarpTarget> GetCurrentWarpTargets() const { return WarpTargetContainerInstance.Get<FGMCE_MotionWarpTargetContainer>().GetTargets(); }
+	
+	UFUNCTION(BlueprintCallable)
+	void ReplaceAllWarpTargets(UPARAM(ref) TArray<FGMCE_MotionWarpTarget>& Targets);
 	
 	void BindToMovementComponent();
 

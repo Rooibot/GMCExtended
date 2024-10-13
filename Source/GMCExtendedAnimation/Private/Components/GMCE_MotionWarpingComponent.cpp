@@ -296,6 +296,11 @@ void UGMCE_MotionWarpingComponent::BeginPlay()
 	BindToMovementComponent();
 }
 
+void UGMCE_MotionWarpingComponent::ReplaceAllWarpTargets(TArray<FGMCE_MotionWarpTarget>& Targets)
+{
+	WarpTargetContainerInstance.GetMutable<FGMCE_MotionWarpTargetContainer>().WarpTargets = Targets;
+}
+
 void UGMCE_MotionWarpingComponent::BindToMovementComponent()
 {
 	if (MotionWarpSubject && !MovementComponent)

@@ -20,7 +20,6 @@ FTransform UGMCE_RootMotionModifier_SkewWarp::ProcessRootMotion(const FTransform
 	if (CurrentPosition > EndTime)
 	{
 		ExtraRootMotion = UGMCE_MotionWarpingUtilities::ExtractRootMotionFromAnimation(AnimationSequence.Get(), EndTime, CurrentPosition);
-		UE_LOG(LogGMCExAnimation, Verbose, TEXT("EXT: %s from %f to %f"), *ExtraRootMotion.ToString(), EndTime, CurrentPosition);
 	}
 
 	if (bWarpTranslation)
