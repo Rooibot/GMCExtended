@@ -56,25 +56,28 @@ bool UGMCE_RootMotionPathHolder::GeneratePathForMontage(UGMCE_MotionWarpingCompo
 		WarpContext.OwnerTransform = CurrentWorldTransform;
 		const FTransform NewMovement = WarpingComponent->ProcessRootMotionFromContext(RawMovement, WarpContext);
 
-		//Calculate new actor transform after applying root motion to this component
-		const FTransform ActorToWorld = CurrentWorldTransform;
-		const FTransform ComponentTransform = FTransform(InContext.MeshRelativeTransform.GetRotation().Rotator(), InContext.MeshRelativeTransform.GetTranslation()) * ActorToWorld;
-		const FTransform ComponentToActor = InContext.MeshRelativeTransform.Inverse();
+		if (!NewMovement.Equals(FTransform::Identity))
+		{
+			//Calculate new actor transform after applying root motion to this component
+			const FTransform ActorToWorld = CurrentWorldTransform;
+			const FTransform ComponentTransform = FTransform(InContext.MeshRelativeTransform.GetRotation().Rotator(), InContext.MeshRelativeTransform.GetTranslation()) * ActorToWorld;
+			const FTransform ComponentToActor = InContext.MeshRelativeTransform.Inverse();
 
-		const FTransform NewComponentToWorld = NewMovement * ComponentTransform;
-		const FTransform NewActorTransform = ComponentToActor * NewComponentToWorld;
+			const FTransform NewComponentToWorld = NewMovement * ComponentTransform;
+			const FTransform NewActorTransform = ComponentToActor * NewComponentToWorld;
 
-		const FVector DeltaWorldTranslation = NewActorTransform.GetTranslation() - ActorToWorld.GetTranslation();
+			const FVector DeltaWorldTranslation = NewActorTransform.GetTranslation() - ActorToWorld.GetTranslation();
 
-		const FQuat NewWorldRotation = ComponentTransform.GetRotation() * NewMovement.GetRotation();
-		const FQuat DeltaWorldRotation = NewWorldRotation * ComponentTransform.GetRotation().Inverse();
+			const FQuat NewWorldRotation = ComponentTransform.GetRotation() * NewMovement.GetRotation();
+			const FQuat DeltaWorldRotation = NewWorldRotation * ComponentTransform.GetRotation().Inverse();
 	
-		const FTransform DeltaWorldTransform(DeltaWorldRotation, DeltaWorldTranslation);
+			const FTransform DeltaWorldTransform(DeltaWorldRotation, DeltaWorldTranslation);
 		
-		CurrentWorldTransform.Accumulate(DeltaWorldTransform);
+			CurrentWorldTransform.Accumulate(DeltaWorldTransform);
 
-		FlattenedTransform = CurrentWorldTransform;
-		FlattenedTransform.SetTranslation(FlattenedTransform.GetTranslation() + InContext.MeshRelativeTransform.GetTranslation());
+			FlattenedTransform = CurrentWorldTransform;
+			FlattenedTransform.SetTranslation(FlattenedTransform.GetTranslation() + InContext.MeshRelativeTransform.GetTranslation());
+		}
 
 		if (CurrentTime - LastSample > PredictionSampleInterval)
 		{
