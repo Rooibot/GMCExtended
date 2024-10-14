@@ -46,6 +46,6 @@ void UAnimNotifyState_GMCExEarlyBlendOut::NotifyTick(USkeletalMeshComponent* Mes
 
 	if (ShouldBlendOut(MovementComponent))
 	{
-		MovementComponent->StopMontage(MeshComp, MovementComponent->MontageTracker, BlendOutTime, false);
+		MovementComponent->StopMontage(MeshComp, MovementComponent->MontageTracker, BlendOutTime, true);
 	}
 }

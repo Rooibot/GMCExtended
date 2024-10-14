@@ -458,6 +458,9 @@ public:
 	/// Update the cached trajectory prediction. Called automatically if trajectory precalculation is enabled.
 	UFUNCTION(BlueprintCallable, Category="Movement Trajectory")
 	virtual void UpdateTrajectoryPrediction();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Movement Trajectory")
+	FVector GetCurrentVelocityFromHistory();
 	
 	/// Should historical trajectory samples be taken?
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement Trajectory")
@@ -539,8 +542,6 @@ protected:
 	/// Get our current acceleration and rotational velocity from our historical movement samples.
 	void GetCurrentAccelerationRotationVelocityFromHistory(FVector& OutAcceleration, FRotator& OutRotationVelocity, const EGMCE_TrajectoryRotationType& RotationType) const;
 
-	FVector GetCurrentVelocityFromHistory();
-	
 private:
 
 	TRingBuffer<FGMCE_MovementSample> MovementSamples;

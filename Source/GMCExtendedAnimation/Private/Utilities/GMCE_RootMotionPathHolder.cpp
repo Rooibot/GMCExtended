@@ -163,9 +163,10 @@ bool UGMCE_RootMotionPathHolder::GetTransformsAtPosition(float Position, FTransf
 bool UGMCE_RootMotionPathHolder::GetTransformsAtPositionWithBlendOut(const UGMCE_OrganicMovementCmp* MovementComponent,
 	float Position, FTransform& OutComponentTransform, FTransform& OutActorTransform, bool &OutShouldBlendOut, float &OutBlendOutTime)
 {
+	OutShouldBlendOut = false;
+	
 	if (!MovementComponent)
 	{
-		OutShouldBlendOut = false;
 		return GetTransformsAtPosition(Position, OutComponentTransform, OutActorTransform);
 	}
 
@@ -178,12 +179,12 @@ bool UGMCE_RootMotionPathHolder::GetTransformsAtPositionWithBlendOut(const UGMCE
 				const UAnimNotifyState_GMCExEarlyBlendOut* BlendOutNotify = Notify.NotifyStateClass ? Cast<UAnimNotifyState_GMCExEarlyBlendOut>(Notify.NotifyStateClass) : nullptr;
 				if (BlendOutNotify)
 				{
-					if (BlendOutNotify->ShouldBlendOut(MovementComponent))
-					{
+					// if (BlendOutNotify->ShouldBlendOut(MovementComponent))
+					// {
 						OutBlendOutTime = BlendOutNotify->BlendOutTime;
 						OutShouldBlendOut = true;
 						break;
-					}
+					// }
 				}
 			}
 		}
@@ -200,7 +201,7 @@ void UGMCE_RootMotionPathHolder::Reset()
 
 void UGMCE_RootMotionPathHolder::GetActorDeltaBetweenPositions(float StartPosition, float EndPosition, const FVector& OverrideOrigin, FVector& OutDelta, FVector& OutVelocity, float DeltaTimeOverride = -1.f, bool bShowDebug = false)
 {
-	if (PredictedSamples.Samples.IsEmpty() || EndPosition < StartPosition)
+	if (PredictedSamples.Samples.IsEmpty() || EndPosition < StartPosition || StartPosition < PredictedSamples.Samples[0].AccumulatedSeconds)
 	{
 		OutDelta = FVector::ZeroVector;
 		OutVelocity = FVector::ZeroVector;
@@ -219,19 +220,19 @@ void UGMCE_RootMotionPathHolder::GetActorDeltaBetweenPositions(float StartPositi
 	OutDelta = Delta;
 	OutVelocity = Velocity;
 
-	// if (OutDelta.Length() > 80.f || (StartLocation - FirstSample.ActorWorldTransform.GetLocation()).Length() > 30.f)
-	// {
-	// 	APawn* PawnTest = Cast<APawn>(GetOuter());
-	// 	UGMCE_OrganicMovementCmp* MovementCmp = Cast<UGMCE_OrganicMovementCmp>(PawnTest->GetComponentByClass(UGMCE_OrganicMovementCmp::StaticClass()));
- // 		if (MovementCmp)
- // 		{
- // 			UE_LOG(LogGMCExAnimation, Log, TEXT("[%s] Uh oh: %f to %f moved %s (%f) from %s to %s [%d samples]"), *MovementCmp->GetComponentDescription(),
- // 				StartPosition, EndPosition, *OutDelta.ToCompactString(), OutDelta.Length(), *StartLocation.ToCompactString(),
- // 				*SecondSample.ActorWorldTransform.GetLocation().ToCompactString(),
-	// 			PredictedSamples.Samples.Num())
- // 		}
- // 		
-	// }
+	if (OutDelta.Length() > 80.f || (StartLocation - FirstSample.ActorWorldTransform.GetLocation()).Length() > 30.f)
+	{
+		APawn* PawnTest = Cast<APawn>(GetOuter());
+		UGMCE_OrganicMovementCmp* MovementCmp = Cast<UGMCE_OrganicMovementCmp>(PawnTest->GetComponentByClass(UGMCE_OrganicMovementCmp::StaticClass()));
+ 		if (MovementCmp)
+ 		{
+ 			UE_LOG(LogGMCExAnimation, Log, TEXT("[%s] Uh oh: %f to %f moved %s (%f) from %s to %s [%d samples]"), *MovementCmp->GetComponentDescription(),
+ 				StartPosition, EndPosition, *OutDelta.ToCompactString(), OutDelta.Length(), *StartLocation.ToCompactString(),
+ 				*SecondSample.ActorWorldTransform.GetLocation().ToCompactString(),
+				PredictedSamples.Samples.Num())
+ 		}
+ 		
+	}
 
 	if (bShowDebug)
 	{
