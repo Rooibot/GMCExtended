@@ -936,7 +936,7 @@ void UGMCE_OrganicMovementCmp::PreProcessRootMotion(const FGMC_AnimMontageInstan
 {
 	// If we've got a bound delegate to handle modifying root motion, call it. This is used by GMCExAnim to
 	// handle motion warping.
-	if (ProcessRootMotionPreConvertToWorld.IsBound())
+	if (ProcessRootMotionPreConvertToWorld.IsBound() && GetOwner()->GetNetMode() == NM_Standalone)
 	{
 		const FTransform MeshRelativeTransform = SkeletalMesh->GetRelativeTransform();
 		const FTransform WarpedRootMotionTransform = ProcessRootMotionPreConvertToWorld.Execute(InOutRootMotionParams.GetRootMotionTransform(), GetActorTransform_GMC(), MeshRelativeTransform, this, DeltaSeconds);
