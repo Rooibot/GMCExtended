@@ -136,6 +136,13 @@ FQuat UGMCE_RootMotionModifier_Warp::WarpRotation(const FGMCE_MotionWarpContext&
 	return (DeltaOut * RootMotionDelta.GetRotation());
 }
 
+FString UGMCE_RootMotionModifier_Warp::DisplayString() const
+{
+	if (WarpTargetName != NAME_None && !WarpTargetName.ToString().IsEmpty()) return WarpTargetName.ToString();
+	
+	return Super::DisplayString();
+}
+
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 void UGMCE_RootMotionModifier_Warp::PrintLog(const FString& Name, const FTransform& OriginalRootMotion, const FTransform& WarpedRootMotion) const
 {

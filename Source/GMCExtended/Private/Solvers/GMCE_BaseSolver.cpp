@@ -53,6 +53,34 @@ bool UGMCE_BaseSolver::RunSolver(FSolverState& State, float DeltaTime)
 	return NativeRunSolver(State, DeltaTime);	
 }
 
+void UGMCE_BaseSolver::MovementUpdate(FSolverState& State, float DeltaTime)
+{
+	if (bUseBlueprintEvents)
+	{
+		BlueprintMovementUpdate(State, DeltaTime);
+	}
+	
+	NativeMovementUpdate(State, DeltaTime);		
+}
+
+void UGMCE_BaseSolver::MovementUpdateSimulated(FSolverState& State, float DeltaTime)
+{
+	if (bUseBlueprintEvents)
+	{
+		BlueprintMovementUpdateSimulated(State, DeltaTime);
+	}
+	
+	NativeMovementUpdateSimulated(State, DeltaTime);			
+}
+
+void UGMCE_BaseSolver::NativeMovementUpdateSimulated(FSolverState& State, float DeltaTime)
+{
+}
+
+void UGMCE_BaseSolver::NativeMovementUpdate(FSolverState& State, float DeltaTime)
+{
+}
+
 FGameplayTag UGMCE_BaseSolver::GetPreferredSolverTag()
 {
 	FGameplayTag Result = FGameplayTag::EmptyTag;

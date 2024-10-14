@@ -84,6 +84,8 @@ public:
 
 	FString ToString() const;
 
+	virtual FString DisplayString() const;
+
 	bool IsPositionWithinWindow(const float Position) const;
 	
 private:

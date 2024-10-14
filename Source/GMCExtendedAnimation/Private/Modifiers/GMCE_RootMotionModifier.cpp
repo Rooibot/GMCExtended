@@ -128,6 +128,11 @@ FString UGMCE_RootMotionModifier::ToString() const
 		StartTime, EndTime, PreviousPosition, CurrentPosition);
 }
 
+FString UGMCE_RootMotionModifier::DisplayString() const
+{
+	return FString(TEXT(""));
+}
+
 bool UGMCE_RootMotionModifier::IsPositionWithinWindow(const float Position) const
 {
 	return (Position >= StartTime && Position <= EndTime);

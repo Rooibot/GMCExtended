@@ -254,6 +254,9 @@ struct GMCEXTENDED_API FGMCE_MovementSampleCollection
 		const int32 Num = Samples.Num();
 		if (Num > 1)
 		{
+			if (Time < Samples[0].AccumulatedSeconds) return Samples[0];
+			if (Time > Samples.Last().AccumulatedSeconds) return Samples.Last();
+			
 			const int32 LowerBoundIdx = Algo::LowerBound(Samples, Time, [](const FPoseSearchQueryTrajectorySample& TrajectorySample, float Value)
 				{
 					return Value > TrajectorySample.AccumulatedSeconds;

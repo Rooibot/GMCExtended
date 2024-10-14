@@ -101,7 +101,7 @@ public:
 	// General functionality
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="GMCExtended|Debug")
-	FString GetComponentDescription();
+	FString GetComponentDescription() const;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement|Operation")
 	/// When true, the pawn will smoothly rotate around the yaw axis to face the current direction of movement.
@@ -171,6 +171,9 @@ public:
 
 	void UpdateTurnInPlaceState(bool bSimulated = false);
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Movement")
+	bool IsStandalone() const { return GetNetMode() == NM_Standalone; }
+	
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Movement")
 	bool IsTurningInPlace() const { return TurnInPlaceState == EGMCE_TurnInPlaceState::Running; }
 

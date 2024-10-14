@@ -90,6 +90,8 @@ public:
 
 	FQuat WarpRotation(const FGMCE_MotionWarpContext& WarpContext, const FTransform& RootMotionDelta, const FTransform& RootMotionTotal, float DeltaSeconds);
 
+	FString DisplayString() const override;
+	
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	void PrintLog(const FString& Name, const FTransform& OriginalRootMotion, const FTransform& WarpedRootMotion) const;
 #endif

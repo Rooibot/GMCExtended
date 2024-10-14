@@ -21,28 +21,38 @@ class GMCEXTENDEDANIMATION_API UGMCE_RootMotionPathHolder : public UObject
 public:
 	bool GeneratePathForMontage(UGMCE_MotionWarpingComponent* WarpingComponent, USkeletalMeshComponent* MeshComponent, UAnimMontage* Montage, const FGMCE_MotionWarpContext& Context);
 
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, meta=(AdvancedDisplay="bDrawDebug"))
 	void GenerateMontagePath(AGMC_Pawn* Pawn, UAnimMontage* Montage, float StartPosition, float PlayRate, bool bDrawDebug = false);
 
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, meta=(AdvancedDisplay="bDrawDebug"))
 	void GenerateMontagePathWithOverrides(AGMC_Pawn* Pawn, UAnimMontage* Montage, float StartPosition, float PlayRate, const FTransform& OriginTransform, const FTransform& MeshRelativeTransform, bool bDrawDebug = false);
 	
 	FGMCE_MovementSampleCollection GetCalculatedPath() const { return PredictedSamples; }
 
 	UFUNCTION(BlueprintCallable)
-	FTransform GetTransformAtPosition(float Position);
+	bool GetTransformsAtPosition(float Position, FTransform& OutComponentTransform, FTransform& OutActorTransform);
+
+	UFUNCTION(BlueprintCallable)
+	bool GetTransformsAtPositionWithBlendOut(const UGMCE_OrganicMovementCmp* MovementComponent, float Position, FTransform& OutComponentTransform, FTransform& OutActorTransform, bool& OutShouldBlendOut, float& OutBlendOutTime);
 
 	UFUNCTION(BlueprintCallable)
 	void Reset();
 
-	UFUNCTION(BlueprintCallable)
-	void GetDeltaBetweenPositions(float StartPosition, float EndPosition, FVector& OutDelta, FVector& OutVelocity, float DeltaTimeOverride);
+	UFUNCTION(BlueprintCallable, meta=(AutoCreateRefTerm="OverrideOrigin", AdvancedDisplay="OverrideOrigin,bShowDebug"))
+	void GetActorDeltaBetweenPositions(float StartPosition, float EndPosition, UPARAM(ref) const FVector& OverrideOrigin, FVector& OutDelta, FVector& OutVelocity, float DeltaTimeOverride, bool bShowDebug);
 	
+	UFUNCTION(BlueprintCallable, meta=(AutoCreateRefTerm="OverrideOrigin", AdvancedDisplay="OverrideOrigin,bShowDebug"))
+	bool GetActorDeltaBetweenPositionsWithBlendOut(const UGMCE_OrganicMovementCmp* MovementComponent, float StartPosition, float EndPosition, UPARAM(ref) const FVector& OverrideOrigin, FVector& OutDelta, FVector& OutVelocity, float &OutBlendOutTime, float DeltaTimeOverride, bool bShowDebug);
+
+
 protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="GMC Extended")
 	float PredictionSampleInterval { 0.01f };
 	
 	FGMCE_MovementSampleCollection PredictedSamples;
+
+	UPROPERTY()
+	UAnimSequenceBase* PredictionSequence;
 	
 };

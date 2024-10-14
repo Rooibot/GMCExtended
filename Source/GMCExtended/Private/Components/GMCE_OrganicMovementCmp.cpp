@@ -25,6 +25,17 @@ void UGMCE_OrganicMovementCmp::BeginPlay()
 {
 	Super::BeginPlay();
 
+	FString RoleString = GetNetRoleAsString(GetOwnerRole());
+	if (IsRemotelyControlledServerPawn())
+	{
+		RoleString = FString(TEXT("remote ")) + RoleString;
+	}
+	else if (IsLocallyControlledServerPawn())
+	{
+		RoleString = FString(TEXT("local ")) + RoleString;
+	}
+	ComponentLogDescriptionString = RoleString;
+
 	for (const auto& SolverClass : SolverClasses)
 	{
 		// We do not allow abstract parent solvers to be instantiated.
@@ -429,12 +440,32 @@ void UGMCE_OrganicMovementCmp::MovementUpdate_Implementation(float DeltaSeconds)
 	bInputPresent = !GetProcessedInputVector().IsZero();
 	InputVelocityOffset = UGMCE_UtilityLibrary::GetAngleDifferenceXY(GetLinearVelocity_GMC(), GetProcessedInputVector());
 	CalculatedEffectiveAcceleration = GetTransientAcceleration();
+
+	if (GetMovementMode() == GetSolverMovementMode())
+	{
+		if (const auto ActiveSolver = GetActiveSolver())
+		{
+			GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("[%f] SOLVER:  pre-update location: %s"), GetMoveTimestamp(), *GetActorLocation_GMC().ToCompactString())
+			FSolverState State = GetSolverState();
+			ActiveSolver->MovementUpdate(State, DeltaSeconds);
+			GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("[%f] SOLVER: post-update location: %s"), GetMoveTimestamp(), *GetActorLocation_GMC().ToCompactString())
+		}
+	}
+
 }
 
 void UGMCE_OrganicMovementCmp::MovementUpdateSimulated_Implementation(float DeltaSeconds)
 {
 	Super::MovementUpdateSimulated_Implementation(DeltaSeconds);
 
+	if (GetMovementMode() == GetSolverMovementMode())
+	{
+		if (const auto ActiveSolver = GetActiveSolver())
+		{
+			FSolverState State = GetSolverState();
+			ActiveSolver->MovementUpdateSimulated(State, DeltaSeconds);
+		}
+	}
 }
 
 void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
@@ -653,6 +684,7 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 		{
 			FSolverState State = GetSolverState();
 
+			GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("[%f] SOLVER:  pre-physics location: %s"), GetMoveTimestamp(), *GetActorLocation_GMC().ToCompactString())
 			if (Solver->PerformMovement(State, DeltaSeconds))
 			{
 				// Solver wants to maintain control. However, make sure to check if our active solver tag needs to
@@ -677,6 +709,7 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 				OnSolverChangedMode(FGameplayTag::EmptyTag, CurrentActiveSolverTag);
 				CurrentActiveSolverTag = FGameplayTag::EmptyTag;
 			}
+			GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("[%f] SOLVER: post-physics location: %s"), GetMoveTimestamp(), *GetActorLocation_GMC().ToCompactString())
 		}
 		else
 		{
@@ -884,25 +917,14 @@ void UGMCE_OrganicMovementCmp::OnMontageStarted(UAnimMontage* Montage, float Pos
 	Super::OnMontageStarted(Montage, Position, PlayRate, bInterrupted, DeltaSeconds);
 }
 
-FString UGMCE_OrganicMovementCmp::GetComponentDescription()
+FString UGMCE_OrganicMovementCmp::GetComponentDescription() const
 {
 	if (ComponentLogDescriptionString.Len() > 0)
 	{
 		return ComponentLogDescriptionString;
 	}
 	
-	FString RoleString = GetNetRoleAsString(GetOwnerRole());
-	if (IsRemotelyControlledServerPawn())
-	{
-		RoleString = FString(TEXT("remote ")) + RoleString;
-	}
-	else if (IsLocallyControlledServerPawn())
-	{
-		RoleString = FString(TEXT("local ")) + RoleString;
-	}
-
-	ComponentLogDescriptionString = RoleString;
-	return RoleString;
+	return FString(TEXT("unknown"));
 }
 
 #pragma endregion 
@@ -917,8 +939,16 @@ void UGMCE_OrganicMovementCmp::PreProcessRootMotion(const FGMC_AnimMontageInstan
 	if (ProcessRootMotionPreConvertToWorld.IsBound())
 	{
 		const FTransform MeshRelativeTransform = SkeletalMesh->GetRelativeTransform();
+		const FTransform WarpedRootMotionTransform = ProcessRootMotionPreConvertToWorld.Execute(InOutRootMotionParams.GetRootMotionTransform(), GetActorTransform_GMC(), MeshRelativeTransform, this, DeltaSeconds);
+
+		if (!WarpedRootMotionTransform.Equals(InOutRootMotionParams.GetRootMotionTransform()))
+		{
+			GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("Root Motion Warped: at %s: %s %s -> %s %s"), *GetActorLocation_GMC().ToCompactString(),
+				*InOutRootMotionParams.GetRootMotionTransform().GetTranslation().ToCompactString(), *InOutRootMotionParams.GetRootMotionTransform().GetRotation().Rotator().ToCompactString(),
+				*WarpedRootMotionTransform.GetTranslation().ToCompactString(), *WarpedRootMotionTransform.GetRotation().Rotator().ToCompactString())
+		}
 		
-		InOutRootMotionParams.Set(ProcessRootMotionPreConvertToWorld.Execute(InOutRootMotionParams.GetRootMotionTransform(), GetActorTransform_GMC(), MeshRelativeTransform, this, DeltaSeconds));
+		InOutRootMotionParams.Set(WarpedRootMotionTransform);
 	}
 
 	Super::PreProcessRootMotion(MontageInstance, InOutRootMotionParams, DeltaSeconds);

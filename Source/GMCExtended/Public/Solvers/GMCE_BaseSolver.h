@@ -48,11 +48,11 @@ struct GMCEXTENDED_API FSolverState
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
 	FVector RawInput { 0.f };
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Solver State")
-	FVector ProcessedInput { 0.f };
-
 	// -- Values below here can be changed by a solver and will be acted on.
 	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Solver State")
+	FVector ProcessedInput { 0.f };
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Solver State")
 	FGameplayTagContainer AvailableSolvers { };
 	
@@ -134,6 +134,12 @@ public:
 	 * @return true if the solver wants to retain control of movement, false if it should surrender it after this cycle.
 	 */
 	bool PerformMovement(FSolverState& State, float DeltaTime);
+
+	void MovementUpdate(FSolverState& State, float DeltaTime);
+
+	void MovementUpdateSimulated(FSolverState& State, float DeltaTime);
+	
+	
 
 protected:
 
@@ -221,6 +227,10 @@ public:
 	 * @return true if the solver wishes to retain control of movement, otherwise false to surrender it.
 	 */
 	virtual bool NativePerformMovement(FSolverState& State, float DeltaTime);
+
+	virtual void NativeMovementUpdate(FSolverState& State, float DeltaTime);
+
+	virtual void NativeMovementUpdateSimulated(FSolverState& State, float DeltaTime);
 #pragma endregion
 	
 	// ------ BLUEPRINT
@@ -271,6 +281,12 @@ public:
 	 */
 	UFUNCTION(BlueprintImplementableEvent, DisplayName="Perform Movement", Category="GMC Extended|Solvers")
 	void BlueprintPerformMovement(UPARAM(ref) FSolverState& State, float DeltaTime, UPARAM(DisplayName="Retain control") bool& OutResult);
+
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Movement Update", Category="GMC Extended|Solvers")
+	void BlueprintMovementUpdate(UPARAM(ref) FSolverState& State, float DeltaTime);
+
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Simulated Movement Update", Category="GMC Extended|Solvers")
+	void BlueprintMovementUpdateSimulated(UPARAM(ref) FSolverState& State, float DeltaTime);
 	
 	UGMCE_OrganicMovementCmp* GetMovementComponent() const { return MovementComponent; }
 
