@@ -46,6 +46,9 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 	FRotator ActorDeltaRotation { FRotator::ZeroRotator };
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
+	FTransform ComponentLocalTransform { FTransform::Identity };
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")
 	FQuat MeshComponentRelativeRotation { FQuat::Identity };
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Trajectory")

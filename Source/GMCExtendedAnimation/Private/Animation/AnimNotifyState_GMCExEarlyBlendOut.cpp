@@ -5,16 +5,16 @@
 
 #include "GMCE_OrganicMovementCmp.h"
 
-bool UAnimNotifyState_GMCExEarlyBlendOut::ShouldBlendOut(const UGMCE_OrganicMovementCmp* MovementComponent) const
+bool UAnimNotifyState_GMCExEarlyBlendOut::ShouldBlendOut(const UGMCE_OrganicMovementCmp* MovementComponent, bool bIsPredicted) const
 {
 	switch(Condition)
 	{
 	case EGMCExEarlyBlendOutCondition::Forced:
 		return true;
 	case EGMCExEarlyBlendOutCondition::OnInput:
-		return MovementComponent->IsInputPresent();
+		return bIsPredicted ? true : MovementComponent->IsInputPresent();
 	case EGMCExEarlyBlendOutCondition::OnFalling:
-		return MovementComponent->GetLinearVelocity_GMC().Z < 0.f;
+		return bIsPredicted ? true : MovementComponent->GetLinearVelocity_GMC().Z < 0.f;
 	}
 
 	return false;
@@ -44,8 +44,19 @@ void UAnimNotifyState_GMCExEarlyBlendOut::NotifyTick(USkeletalMeshComponent* Mes
 
 	if (!MovementComponent) return;
 
-	if (ShouldBlendOut(MovementComponent))
+	if (ShouldBlendOut(MovementComponent, false))
 	{
 		MovementComponent->StopMontage(MeshComp, MovementComponent->MontageTracker, BlendOutTime, true);
+
+		if (MovementComponent->IsSmoothedListenServerPawn())
+		{
+			// If we're a smoothed listen server pawn, we want to make sure we stop montage on both the simulated version
+			// (for smoothness) and the real server version (for, y'know, general network accuracy).
+			MovementComponent->SV_SwapServerState();
+			MovementComponent->StopMontage(MeshComp, MovementComponent->MontageTracker, BlendOutTime, true);
+			MovementComponent->SV_SwapServerState();			
+		}
+
+		MeshComp->GetAnimInstance()->Montage_Stop(BlendOutTime);
 	}
 }

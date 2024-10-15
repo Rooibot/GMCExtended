@@ -1,13 +1,11 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "Utilities/GMCE_RootMotionPathHolder.h"
-
+#include "GMCE_RootMotionPathHolder.h"
 #include "AnimNotifyState_GMCExEarlyBlendOut.h"
 #include "GMCExtendedAnimationLog.h"
 #include "GMCE_MotionWarpingComponent.h"
 #include "GMCE_MotionWarpingUtilities.h"
-#include "DSP/SampleBufferReader.h"
 
 bool UGMCE_RootMotionPathHolder::GeneratePathForMontage(UGMCE_MotionWarpingComponent* WarpingComponent, USkeletalMeshComponent* MeshComponent, UAnimMontage* Montage, const FGMCE_MotionWarpContext& InContext)
 {
@@ -19,7 +17,7 @@ bool UGMCE_RootMotionPathHolder::GeneratePathForMontage(UGMCE_MotionWarpingCompo
 	FTransform CurrentWorldTransform = InContext.OwnerTransform;
 	FTransform PreviousWorldTransform = InContext.OwnerTransform;
 
-	const float SampleSize = (Montage->GetPlayLength() / (Montage->GetNumberOfSampledKeys() * 6.f)) / InContext.PlayRate;
+	const float SampleSize = (Montage->GetPlayLength() / (Montage->GetNumberOfSampledKeys() * 10.f)) / InContext.PlayRate;
 	int32 NumSamples = static_cast<int32>(Montage->GetPlayLength() / PredictionSampleInterval) + 1;
 	float CurrentTime = InContext.CurrentPosition;
 
@@ -31,15 +29,17 @@ bool UGMCE_RootMotionPathHolder::GeneratePathForMontage(UGMCE_MotionWarpingCompo
 
 	FTransform FlattenedTransform = CurrentWorldTransform;
 	FlattenedTransform.SetTranslation(FlattenedTransform.GetTranslation() + InContext.MeshRelativeTransform.GetTranslation());
+	FlattenedTransform.SetRotation((FlattenedTransform.GetRotation().Rotator() + InContext.MeshRelativeTransform.GetRotation().Rotator()).Quaternion());
+	FTransform PreviousSampledTransform = FlattenedTransform;
 	
 	FGMCE_MovementSample NewSample;
 	NewSample.AccumulatedSeconds = CurrentTime;
 	NewSample.WorldTransform = FlattenedTransform;
 	NewSample.ActorWorldRotation = CurrentWorldTransform.GetRotation().Rotator();
 	NewSample.ActorWorldTransform = CurrentWorldTransform;
-
+	
 	PredictedPathSamples.Samples.Add(NewSample);
-	LastSample = CurrentTime;	
+	LastSample = CurrentTime;
 
 	while (CurrentTime < Montage->GetPlayLength())
 	{
@@ -75,6 +75,7 @@ bool UGMCE_RootMotionPathHolder::GeneratePathForMontage(UGMCE_MotionWarpingCompo
 
 			FlattenedTransform = CurrentWorldTransform;
 			FlattenedTransform.SetTranslation(FlattenedTransform.GetTranslation() + InContext.MeshRelativeTransform.GetTranslation());
+			FlattenedTransform.SetRotation((FlattenedTransform.GetRotation().Rotator() + InContext.MeshRelativeTransform.GetRotation().Rotator()).Quaternion());
 		}
 
 		if (CurrentTime - LastSample > PredictionSampleInterval)
@@ -82,16 +83,19 @@ bool UGMCE_RootMotionPathHolder::GeneratePathForMontage(UGMCE_MotionWarpingCompo
 			NewSample = FGMCE_MovementSample();
 			NewSample.AccumulatedSeconds = CurrentTime;
 			NewSample.WorldTransform = FlattenedTransform;
-			NewSample.WorldLinearVelocity = (CurrentWorldTransform.GetLocation() - PreviousWorldTransform.GetLocation()) / (CurrentTime - LastSample);
+			NewSample.WorldLinearVelocity = (FlattenedTransform.GetLocation() - PreviousSampledTransform.GetLocation()) / (CurrentTime - LastSample);
 			NewSample.ActorWorldRotation = CurrentWorldTransform.GetRotation().Rotator();
 			NewSample.ActorWorldTransform = CurrentWorldTransform;
+			NewSample.ComponentLocalTransform = NewMovement;
 
 			PredictedPathSamples.Samples.Add(NewSample);
 			LastSample = CurrentTime;
+
+			PreviousSampledTransform = FlattenedTransform;
+			PreviousWorldTransform = CurrentWorldTransform;
 		}
 
 		PreviousTimestamp = CurrentTime;
-		PreviousWorldTransform = CurrentWorldTransform;
 	}
 
 	PredictedSamples = PredictedPathSamples;
@@ -148,9 +152,15 @@ void UGMCE_RootMotionPathHolder::GenerateMontagePathWithOverrides(AGMC_Pawn* Paw
 
 bool UGMCE_RootMotionPathHolder::GetTransformsAtPosition(float Position, FTransform& OutComponentTransform, FTransform& OutActorTransform)
 {
-	if (PredictedSamples.Samples.IsEmpty()) return false;
+	if (PredictedSamples.Samples.IsEmpty())
+	{
+		return false;
+	}
 
-	if (Position < PredictedSamples.Samples[0].AccumulatedSeconds || Position > PredictedSamples.Samples.Last().AccumulatedSeconds) return false;
+	if (Position < PredictedSamples.Samples[0].AccumulatedSeconds || Position > PredictedSamples.Samples.Last().AccumulatedSeconds)
+	{
+		return false;
+	}
 	
 	const FGMCE_MovementSample FoundSample = PredictedSamples.GetSampleAtTime(Position, true);
 
@@ -177,26 +187,31 @@ bool UGMCE_RootMotionPathHolder::GetTransformsAtPositionWithBlendOut(const UGMCE
 			if (Position > Notify.GetTriggerTime() && Position < Notify.GetEndTriggerTime())
 			{
 				const UAnimNotifyState_GMCExEarlyBlendOut* BlendOutNotify = Notify.NotifyStateClass ? Cast<UAnimNotifyState_GMCExEarlyBlendOut>(Notify.NotifyStateClass) : nullptr;
-				if (BlendOutNotify)
+				if (BlendOutNotify && BlendOutNotify->ShouldBlendOut(MovementComponent, true))
 				{
-					// if (BlendOutNotify->ShouldBlendOut(MovementComponent))
-					// {
-						OutBlendOutTime = BlendOutNotify->BlendOutTime;
-						OutShouldBlendOut = true;
-						break;
-					// }
+					OutBlendOutTime = BlendOutNotify->BlendOutTime;
+					OutShouldBlendOut = true;
+					break;
 				}
 			}
 		}
 	}
+
+	const bool bResult = GetTransformsAtPosition(Position, OutComponentTransform, OutActorTransform);
+
+	if (!bResult)
+	{
+		UE_LOG(LogGMCExAnimation, Verbose, TEXT("[%s] Got bad result for %f with %d samples."), *MovementComponent->GetComponentDescription(), Position, PredictedSamples.Samples.Num())
+	}
 	
-	return GetTransformsAtPosition(Position, OutComponentTransform, OutActorTransform);
+	return bResult;
 }
 
 void UGMCE_RootMotionPathHolder::Reset()
 {
 	PredictedSamples = FGMCE_MovementSampleCollection();
 	PredictionSequence = nullptr;
+	CachedPredictedBlendOut = -1.f;
 }
 
 void UGMCE_RootMotionPathHolder::GetActorDeltaBetweenPositions(float StartPosition, float EndPosition, const FVector& OverrideOrigin, FVector& OutDelta, FVector& OutVelocity, float DeltaTimeOverride = -1.f, bool bShowDebug = false)
@@ -219,20 +234,6 @@ void UGMCE_RootMotionPathHolder::GetActorDeltaBetweenPositions(float StartPositi
 	const FVector Velocity = Time > 0.f ? Delta / Time : FVector::ZeroVector;
 	OutDelta = Delta;
 	OutVelocity = Velocity;
-
-	if (OutDelta.Length() > 80.f || (StartLocation - FirstSample.ActorWorldTransform.GetLocation()).Length() > 30.f)
-	{
-		APawn* PawnTest = Cast<APawn>(GetOuter());
-		UGMCE_OrganicMovementCmp* MovementCmp = Cast<UGMCE_OrganicMovementCmp>(PawnTest->GetComponentByClass(UGMCE_OrganicMovementCmp::StaticClass()));
- 		if (MovementCmp)
- 		{
- 			UE_LOG(LogGMCExAnimation, Log, TEXT("[%s] Uh oh: %f to %f moved %s (%f) from %s to %s [%d samples]"), *MovementCmp->GetComponentDescription(),
- 				StartPosition, EndPosition, *OutDelta.ToCompactString(), OutDelta.Length(), *StartLocation.ToCompactString(),
- 				*SecondSample.ActorWorldTransform.GetLocation().ToCompactString(),
-				PredictedSamples.Samples.Num())
- 		}
- 		
-	}
 
 	if (bShowDebug)
 	{
@@ -269,7 +270,7 @@ bool UGMCE_RootMotionPathHolder::GetActorDeltaBetweenPositionsWithBlendOut(const
 				const UAnimNotifyState_GMCExEarlyBlendOut* BlendOutNotify = Notify.NotifyStateClass ? Cast<UAnimNotifyState_GMCExEarlyBlendOut>(Notify.NotifyStateClass) : nullptr;
 				if (BlendOutNotify)
 				{
-					bShouldBlendOut = BlendOutNotify->ShouldBlendOut(MovementComponent);
+					bShouldBlendOut = BlendOutNotify->ShouldBlendOut(MovementComponent, true);
 					if (bShouldBlendOut)
 					{
 						OutBlendOutTime = BlendOutNotify->BlendOutTime;
@@ -289,4 +290,141 @@ bool UGMCE_RootMotionPathHolder::GetActorDeltaBetweenPositionsWithBlendOut(const
 	
 	GetActorDeltaBetweenPositions(StartPosition, EndPosition, OverrideOrigin, OutDelta, OutVelocity, DeltaTimeOverride, bShowDebug);
 	return false;
+}
+
+bool UGMCE_RootMotionPathHolder::GetActorDeltaTransformBetweenPositionsWithBlendOut(
+	const UGMCE_OrganicMovementCmp* MovementComponent, float StartPosition, float EndPosition,
+	const FTransform& OverrideOrigin, FTransform& OutDelta, float& OutBlendOutTime, float DeltaTimeOverride,
+	bool bShowDebug)
+{
+	bool bShouldBlendOut = false;
+	OutBlendOutTime = 0.f;
+	if (PredictionSequence)
+	{
+		for (const auto& Notify : PredictionSequence->Notifies)
+		{
+			if ((StartPosition > Notify.GetTriggerTime() && StartPosition < Notify.GetEndTriggerTime()) || (EndPosition > Notify.GetEndTriggerTime() && EndPosition < Notify.GetEndTriggerTime()))
+			{
+				const UAnimNotifyState_GMCExEarlyBlendOut* BlendOutNotify = Notify.NotifyStateClass ? Cast<UAnimNotifyState_GMCExEarlyBlendOut>(Notify.NotifyStateClass) : nullptr;
+				if (BlendOutNotify)
+				{
+					bShouldBlendOut = BlendOutNotify->ShouldBlendOut(MovementComponent, true);
+					if (bShouldBlendOut)
+					{
+						OutBlendOutTime = BlendOutNotify->BlendOutTime;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	if (bShouldBlendOut)
+	{
+		OutDelta = FTransform::Identity;
+		return true;
+	}
+
+	if (PredictedSamples.Samples.IsEmpty() || EndPosition < StartPosition || StartPosition < PredictedSamples.Samples[0].AccumulatedSeconds)
+	{
+		OutDelta = FTransform::Identity;
+		return false;
+	}
+
+	const FGMCE_MovementSample FirstSample = PredictedSamples.GetSampleAtTime(StartPosition, true);
+	const FGMCE_MovementSample SecondSample = PredictedSamples.GetSampleAtTime(EndPosition, true);
+	
+	const float Time = DeltaTimeOverride > 0.f ? DeltaTimeOverride : (SecondSample.AccumulatedSeconds - FirstSample.AccumulatedSeconds);
+
+	const FTransform StartTransform = OverrideOrigin.Equals(FTransform::Identity) ? FirstSample.ActorWorldTransform : OverrideOrigin;
+
+	FRotator DeltaRotator = SecondSample.ActorWorldTransform.GetRotation().Rotator() - StartTransform.GetRotation().Rotator();
+	FVector DeltaTranslation = SecondSample.ActorWorldTransform.GetLocation() - StartTransform.GetLocation();
+
+	OutDelta = FTransform(DeltaRotator, DeltaTranslation);
+	return false;
+}
+
+bool UGMCE_RootMotionPathHolder::GetPredictedPositionForBlendOut(float& OutBlendPosition)
+{
+	if (CachedPredictedBlendOut > 0.f)
+	{
+		OutBlendPosition = CachedPredictedBlendOut;
+		return true;
+	}
+
+	if (PredictionSequence)
+	{
+		for (const auto& Notify : PredictionSequence->Notifies)
+		{
+			const UAnimNotifyState_GMCExEarlyBlendOut* BlendOutNotify = Notify.NotifyStateClass ? Cast<UAnimNotifyState_GMCExEarlyBlendOut>(Notify.NotifyStateClass) : nullptr;
+			if (BlendOutNotify && (Notify.GetTriggerTime() < CachedPredictedBlendOut || CachedPredictedBlendOut < 0.f))
+			{
+				CachedPredictedBlendOut = Notify.GetTriggerTime();
+			}
+		}
+	}
+
+	OutBlendPosition = CachedPredictedBlendOut;
+	return CachedPredictedBlendOut > 0.f;
+}
+
+bool UGMCE_RootMotionPathHolder::GetLinearVelocityAtPosition(float Position, FVector& OutVelocity)
+{
+	if (PredictedSamples.Samples.IsEmpty()) return false;
+
+	if (Position < PredictedSamples.Samples[0].AccumulatedSeconds || Position > PredictedSamples.Samples.Last().AccumulatedSeconds) return false;
+
+	FGMCE_MovementSample Sample = PredictedSamples.GetSampleAtTime(Position, true);
+	OutVelocity = Sample.WorldLinearVelocity;
+	return true;
+}
+
+bool UGMCE_RootMotionPathHolder::GetSampleRange(float& OutFirstSample, float& OutLastSample) const
+{
+	if (PredictedSamples.Samples.IsEmpty()) return false;
+	
+	OutFirstSample = PredictedSamples.Samples[0].AccumulatedSeconds;
+	OutLastSample = PredictedSamples.Samples.Last().AccumulatedSeconds;
+	return true;
+}
+
+FString UGMCE_RootMotionPathHolder::ToString() const
+{
+	if (PredictedSamples.Samples.IsEmpty()) return "empty";
+	
+	FString Result = FString::Printf(TEXT("%d samples: %f [%s] -> %f [%s]"),
+		PredictedSamples.Samples.Num(), PredictedSamples.Samples[0].AccumulatedSeconds, *PredictedSamples.Samples[0].ActorWorldTransform.GetLocation().ToCompactString(),
+		PredictedSamples.Samples.Last().AccumulatedSeconds, *PredictedSamples.Samples.Last().ActorWorldTransform.GetLocation().ToString());
+
+	return Result;
+}
+
+bool UGMCE_RootMotionPathHolder::GetSampleAtPositionWithBlendOut(UGMCE_OrganicMovementCmp* MovementComponent, const float Position, FGMCE_MovementSample& OutSample,
+	bool& bOutWantsBlend, float& OutBlendTime, bool bExtrapolate) const
+{
+	if (PredictedSamples.Samples.IsEmpty()) return false;
+
+	if (Position < PredictedSamples.Samples[0].AccumulatedSeconds || Position > PredictedSamples.Samples.Last().AccumulatedSeconds) return false;
+	
+	if (PredictionSequence)
+	{
+		for (const auto& Notify : PredictionSequence->Notifies)
+		{
+			if (Position > Notify.GetTriggerTime() && Position < Notify.GetEndTriggerTime())
+			{
+				const UAnimNotifyState_GMCExEarlyBlendOut* BlendOutNotify = Notify.NotifyStateClass ? Cast<UAnimNotifyState_GMCExEarlyBlendOut>(Notify.NotifyStateClass) : nullptr;
+				if (BlendOutNotify && BlendOutNotify->ShouldBlendOut(MovementComponent, true))
+				{
+					OutBlendTime = BlendOutNotify->BlendOutTime;
+					bOutWantsBlend = true;
+					break;
+				}
+			}
+		}
+	}
+	
+	OutSample = GetSampleForTime(Position, bExtrapolate);
+
+	return true;
 }

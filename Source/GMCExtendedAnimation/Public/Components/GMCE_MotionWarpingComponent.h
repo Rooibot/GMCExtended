@@ -13,6 +13,7 @@
 
 class AGMC_Pawn;
 class UGMCE_OrganicMovementCmp;
+class UGMCE_RootMotionPathHolder;
 
 USTRUCT(BlueprintType)
 struct FGMCE_MotionWarpingWindowData
@@ -195,6 +196,9 @@ public:
 	
 	UFUNCTION(BlueprintCallable)
 	void ReplaceAllWarpTargets(UPARAM(ref) TArray<FGMCE_MotionWarpTarget>& Targets);
+
+	UFUNCTION(BlueprintCallable, meta=(AdvancedDisplay = "bDebug"), Category="GMC Extended|Motion Warping")
+	void PrecalculatePathWithWarpTargets(UAnimMontage* Montage, float StartPosition, float PlayRate, FTransform OriginTransform, FTransform MeshRelativeTransform, UPARAM(ref) TArray<FGMCE_MotionWarpTarget>& Targets, bool bDebug);
 	
 	void BindToMovementComponent();
 
@@ -202,6 +206,9 @@ public:
 	void GetLastRootMotionStep(FTransform& OutDeltaTransform, float& OutDeltaTime, bool bConsume = true);
 
 	virtual FTransform ProcessRootMotionFromContext(const FTransform& InTransform, FGMCE_MotionWarpContext& InContext);
+
+	UFUNCTION(BlueprintCallable, Category="GMC Extended|Motion Warping")
+	UGMCE_RootMotionPathHolder* GetPathHolder() const { return PathHolder; }
 	
 protected:
 
@@ -214,7 +221,7 @@ protected:
 	// Called by GMCEx when processing root motion montages; this is where the meat of the
 	// motion warping happens, as it is what actually modifies the transform before GMCv2
 	// applies it.
-	virtual FTransform ProcessRootMotion(const FTransform& InTransform, const FTransform& ActorTransform, const FTransform& MeshRelativeTransform, UGMCE_OrganicMovementCmp* MovementComponent, float DeltaSeconds);
+	virtual FTransform ProcessRootMotion(const FTransform& InTransform, const FTransform& ActorTransform, const FTransform& MeshRelativeTransform, UGMCE_OrganicMovementCmp* MovementComponent, float DeltaSeconds, bool bUsePrecalculatedPath);
 
 	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, AdvancedDisplay, Category="Motion Warping")
 	UGMCE_OrganicMovementCmp* MovementComponent;
@@ -241,6 +248,9 @@ protected:
 
 	UPROPERTY()
 	float LastDeltaTime;
+
+	UPROPERTY()
+	UGMCE_RootMotionPathHolder* PathHolder;
 	
 	void Update(FGMCE_MotionWarpContext& WarpContext);
 	

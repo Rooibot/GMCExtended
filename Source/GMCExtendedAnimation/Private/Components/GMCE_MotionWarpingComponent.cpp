@@ -3,6 +3,7 @@
 #include "GMCExtendedAnimationLog.h"
 #include "GMCE_MotionWarpingUtilities.h"
 #include "GMCE_MotionWarpTarget.h"
+#include "GMCE_RootMotionPathHolder.h"
 #include "GMCPawn.h"
 
 UGMCE_MotionWarpingComponent::UGMCE_MotionWarpingComponent(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
@@ -83,8 +84,6 @@ int32 UGMCE_MotionWarpingComponent::AddModifier(UGMCE_RootMotionModifier* Modifi
 {
 	if (ensureAlways(Modifier))
 	{
-		UE_LOG(LogGMCExAnimation, Verbose, TEXT("Motion Warping: Modifier added. %s"), *Modifier->ToString())
-
 		return Modifiers.Add(Modifier);
 	}
 
@@ -293,6 +292,7 @@ void UGMCE_MotionWarpingComponent::BeginPlay()
 	
 	OwningPawn = Cast<AGMC_Pawn>(GetOwner());
 	MotionWarpSubject = Cast<IGMCE_MotionWarpSubject>(OwningPawn);
+	PathHolder = NewObject<UGMCE_RootMotionPathHolder>(OwningPawn);
 	BindToMovementComponent();
 }
 
@@ -300,6 +300,20 @@ void UGMCE_MotionWarpingComponent::ReplaceAllWarpTargets(TArray<FGMCE_MotionWarp
 {
 	WarpTargetContainerInstance.GetMutable<FGMCE_MotionWarpTargetContainer>().WarpTargets = Targets;
 }
+
+void UGMCE_MotionWarpingComponent::PrecalculatePathWithWarpTargets(UAnimMontage* Montage, float StartPosition,
+	float PlayRate, FTransform OriginTransform, FTransform MeshRelativeTransform,
+	TArray<FGMCE_MotionWarpTarget>& Targets, bool bDebug)
+{
+	MotionWarpSubject->MotionWarping_GetMeshComponent()->GetAnimInstance();
+
+	LastRootTransform = FTransform::Identity;
+	LastDeltaTime = 0.0f;
+	
+	ReplaceAllWarpTargets(Targets);
+	PathHolder->GenerateMontagePathWithOverrides(GetOwningPawn(), Montage, StartPosition, PlayRate, OriginTransform, MeshRelativeTransform, bDebug);
+}
+
 
 void UGMCE_MotionWarpingComponent::BindToMovementComponent()
 {
@@ -322,7 +336,7 @@ void UGMCE_MotionWarpingComponent::BindToMovementComponent()
 
 void UGMCE_MotionWarpingComponent::GetLastRootMotionStep(FTransform& OutLastDelta, float &OutLastDeltaTime, bool bConsume)
 {
-	OutLastDelta = GetMovementComponent()->GetSkeletalMeshReference()->ConvertLocalRootMotionToWorld(LastRootTransform);
+	OutLastDelta = LastRootTransform;
 	OutLastDeltaTime = LastDeltaTime;
 
 	if (bConsume)
@@ -352,7 +366,7 @@ FTransform UGMCE_MotionWarpingComponent::ProcessRootMotionFromContext(const FTra
 }
 
 FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InTransform, const FTransform& ActorTransform, const FTransform& MeshRelativeTransform,
-                                                           UGMCE_OrganicMovementCmp* GMCMovementComponent, float DeltaSeconds)
+                                                           UGMCE_OrganicMovementCmp* GMCMovementComponent, float DeltaSeconds, bool bUsePrecalculated)
 {
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	if (FGMCE_MotionWarpCvars::CVarMotionWarpingDisable.GetValueOnGameThread() > 0)
@@ -361,6 +375,60 @@ FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InT
 	}
 #endif
 
+	if (bUsePrecalculated && !PathHolder->IsEmpty())
+	{
+		float BlendTime = 0.f;
+		bool bWantsBlend = false;
+		float RealPosition = GMCMovementComponent->MontageTracker.MontagePosition;
+
+		float BlendOutPosition = 0.f;
+
+		if (PathHolder->GetPredictedPositionForBlendOut(BlendOutPosition))
+		{
+			// Clamp to our blend out spot so we're all on the same page about where we stop.
+			RealPosition = FMath::Min(BlendOutPosition, RealPosition);
+		}
+
+		
+		FGMCE_MovementSample Sample;
+		if (!PathHolder->GetSampleAtPositionWithBlendOut(GMCMovementComponent, RealPosition, Sample, bWantsBlend, BlendTime, true))
+		{
+			return InTransform;
+		}
+		
+		if (bWantsBlend)
+		{
+			LastRootTransform = FTransform::Identity;
+			LastDeltaTime = 0.f;
+			return FTransform::Identity;
+		}
+
+		FTransform RealMeshTransform = GMCMovementComponent->GetSkeletalMeshReference()->GetComponentTransform();
+		
+		const FVector MeshDeltaTranslation = (Sample.WorldTransform.GetTranslation() - RealMeshTransform.GetTranslation()).RotateAngleAxis(-RealMeshTransform.GetRotation().Rotator().Yaw, FVector::UpVector);
+		const FRotator MeshDeltaRotation = Sample.WorldTransform.GetRotation().Rotator() - RealMeshTransform.GetRotation().Rotator();
+
+		const FTransform Result = FTransform(MeshDeltaRotation, MeshDeltaTranslation);
+
+		LastRootTransform = GMCMovementComponent->GetSkeletalMeshReference()->ConvertLocalRootMotionToWorld(Result);
+		LastDeltaTime = DeltaSeconds;
+
+		// if (!Result.Equals(FTransform::Identity))
+		// {
+		// 	UE_LOG(LogGMCExAnimation, Verbose, TEXT("[%s]    Root Motion for: %f -> %f"), *MovementComponent->GetComponentDescription(), GMCMovementComponent->PreviousMontagePosition, GMCMovementComponent->MontageTracker.MontagePosition)
+		// 	UE_LOG(LogGMCExAnimation, Verbose, TEXT("[%s]               Move: %f"), *MovementComponent->GetComponentDescription(), MovementComponent->GetMoveTimestamp())
+		// 	UE_LOG(LogGMCExAnimation, Verbose, TEXT("[%s]          Path Data: %s"), *MovementComponent->GetComponentDescription(), *PathHolder->ToString())
+		// 	UE_LOG(LogGMCExAnimation, Verbose, TEXT("[%s]        InTransform: %s"), *MovementComponent->GetComponentDescription(), *InTransform.ToString())
+		// 	UE_LOG(LogGMCExAnimation, Verbose, TEXT("[%s]              Start: a:[%s] m:[%s]"), *MovementComponent->GetComponentDescription(), *ActorTransform.ToString(), *RealMeshTransform.ToString())
+		// 	UE_LOG(LogGMCExAnimation, Verbose, TEXT("[%s]          PredStart: a:[%s] m:[%s]"), *MovementComponent->GetComponentDescription(), *StartSample.ActorWorldTransform.ToString(), *StartSample.WorldTransform.ToString())
+		// 	UE_LOG(LogGMCExAnimation, Verbose, TEXT("[%s]             Target: a:[%s] m:[%s]"), *MovementComponent->GetComponentDescription(), *Sample.ActorWorldTransform.ToString(), *Sample.WorldTransform.ToString())
+		// 	UE_LOG(LogGMCExAnimation, Verbose, TEXT("[%s]       OutTransform: %s"), *MovementComponent->GetComponentDescription(), *Result.ToString())
+		// 	UE_LOG(LogGMCExAnimation, Verbose, TEXT("[%s] -------------------"), *MovementComponent->GetComponentDescription())
+		// }
+		//
+		return Result;
+	}
+	
 	// Force this to load now, else we're in for pain.
 	MotionWarpSubject->MotionWarping_GetMeshComponent()->GetAnimInstance();
 
@@ -418,8 +486,14 @@ FTransform UGMCE_MotionWarpingComponent::ProcessRootMotion(const FTransform& InT
 	}
 #endif
 
-	LastRootTransform = FinalRootMotion;
+	LastRootTransform = MovementComponent->GetSkeletalMeshReference()->ConvertLocalRootMotionToWorld(FinalRootMotion);
 	LastDeltaTime = DeltaSeconds;
+
+	if (!FinalRootMotion.Equals(FTransform::Identity))
+	{
+		UE_LOG(LogGMCExAnimation, Verbose, TEXT("[%s] Final Transform: %s"), *MovementComponent->GetComponentDescription(), *FinalRootMotion.ToString())
+		UE_LOG(LogGMCExAnimation, Verbose, TEXT("[%s] -------------------"), *MovementComponent->GetComponentDescription())
+	}
 
 	return FinalRootMotion;
 }

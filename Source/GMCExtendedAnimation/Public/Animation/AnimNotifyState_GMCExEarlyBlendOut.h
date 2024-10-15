@@ -27,7 +27,7 @@ class GMCEXTENDEDANIMATION_API UAnimNotifyState_GMCExEarlyBlendOut : public UAni
 public:
 
 	UFUNCTION()
-	bool ShouldBlendOut(const UGMCE_OrganicMovementCmp* MovementComponent) const;
+	bool ShouldBlendOut(const UGMCE_OrganicMovementCmp* MovementComponent, bool bIsPredicted = false) const;
 
 	virtual FString GetNotifyName_Implementation() const override;
 

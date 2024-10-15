@@ -458,13 +458,31 @@ void UGMCE_OrganicMovementCmp::MovementUpdateSimulated_Implementation(float Delt
 {
 	Super::MovementUpdateSimulated_Implementation(DeltaSeconds);
 
-	if (GetMovementMode() == GetSolverMovementMode())
+	if (!IsSmoothedListenServerPawn())
 	{
-		if (const auto ActiveSolver = GetActiveSolver())
+		if (GetMovementMode() == GetSolverMovementMode())
 		{
-			FSolverState State = GetSolverState();
-			ActiveSolver->MovementUpdateSimulated(State, DeltaSeconds);
+			bool bNeedsActivate = false;
+			if (CurrentActiveSolverTag != PreviousSolverTag)
+			{
+				OnSolverChangedMode(PreviousSolverTag, CurrentActiveSolverTag);
+				PreviousSolverTag = CurrentActiveSolverTag;
+				bNeedsActivate = true;			
+			}
+		
+			if (const auto ActiveSolver = GetActiveSolver())
+			{
+				FSolverState State = GetSolverState();
+				if (bNeedsActivate) ActiveSolver->ActivateSolver(CurrentActiveSolverTag);
+				ActiveSolver->MovementUpdateSimulated(State, DeltaSeconds);
+			}
 		}
+		else if (PreviousSolverTag != FGameplayTag::EmptyTag || CurrentActiveSolverTag != FGameplayTag::EmptyTag)
+		{
+			OnSolverChangedMode(FGameplayTag::EmptyTag, CurrentActiveSolverTag);
+			CurrentActiveSolverTag = FGameplayTag::EmptyTag;
+			PreviousSolverTag = FGameplayTag::EmptyTag;
+		}		
 	}
 }
 
@@ -478,6 +496,15 @@ void UGMCE_OrganicMovementCmp::GenSimulationTick_Implementation(float DeltaTime)
 	UpdateAnimationHelperValues(DeltaTime);
 	UpdateCalculatedEffectiveAcceleration();
 
+	if (GetMovementMode() == GetSolverMovementMode())
+	{
+		if (UGMCE_BaseSolver* Solver = GetActiveSolver())
+		{
+			auto State = GetSolverState();
+			Solver->SimulationTick(State, DeltaTime);
+		}
+	}
+	
 	if (!IsSmoothedListenServerPawn())
 	{
 		UpdateAllPredictions(DeltaTime);
@@ -500,6 +527,15 @@ void UGMCE_OrganicMovementCmp::GenPredictionTick_Implementation(float DeltaTime)
 {
 	Super::GenPredictionTick_Implementation(DeltaTime);
 	UpdateAnimationHelperValues(DeltaTime);
+
+	if (GetMovementMode() == GetSolverMovementMode())
+	{
+		if (UGMCE_BaseSolver* Solver = GetActiveSolver())
+		{
+			auto State = GetSolverState();
+			Solver->PredictionTick(State, DeltaTime);
+		}
+	}
 }
 
 void UGMCE_OrganicMovementCmp::GenAncillaryTick_Implementation(float DeltaTime, bool bLocalMove,
@@ -507,6 +543,15 @@ void UGMCE_OrganicMovementCmp::GenAncillaryTick_Implementation(float DeltaTime, 
 {
 	Super::GenAncillaryTick_Implementation(DeltaTime, bLocalMove, bCombinedClientMove);
 
+	if (GetMovementMode() == GetSolverMovementMode())
+	{
+		if (UGMCE_BaseSolver* Solver = GetActiveSolver())
+		{
+			auto State = GetSolverState();
+			Solver->AncillaryTick(State, DeltaTime);
+		}
+	}
+	
 	UpdateAllPredictions(DeltaTime);
 }
 
@@ -553,6 +598,18 @@ void UGMCE_OrganicMovementCmp::OnMovementModeChanged_Implementation(EGMC_Movemen
 	{
 		SetRagdollActive(false);
 	}
+
+	if (GetMovementMode() != GetSolverMovementMode() && PreviousMovementMode == GetSolverMovementMode())
+	{
+		if (UGMCE_BaseSolver* Solver = GetActiveSolver())
+		{
+			Solver->DeactivateSolver();
+		}
+		
+		OnSolverChangedMode(FGameplayTag::EmptyTag, CurrentActiveSolverTag);
+		PreviousSolverTag = FGameplayTag::EmptyTag;
+		CurrentActiveSolverTag = FGameplayTag::EmptyTag;
+	}
 	
 	Super::OnMovementModeChanged_Implementation(PreviousMovementMode);
 }
@@ -568,18 +625,55 @@ void UGMCE_OrganicMovementCmp::OnMovementModeChangedSimulated_Implementation(EGM
 		SetRagdollActive(false);
 	}
 
+	if (GetMovementMode() == GetSolverMovementMode() && !IsSmoothedListenServerPawn())
+	{
+		bool bNeedsActivate = CurrentActiveSolverTag != PreviousSolverTag;
+
+		if (bNeedsActivate)
+		{
+			if (auto Solver = GetActiveSolver())
+			{
+				Solver->ActivateSolver(GetActiveSolverTag());
+			}
+			PreviousSolverTag = CurrentActiveSolverTag;
+		}
+	}
+	else if (GetMovementMode() != GetSolverMovementMode() && PreviousMovementMode == GetSolverMovementMode())
+	{
+		if (UGMCE_BaseSolver* Solver = GetSolverForTag(PreviousSolverTag))
+		{
+			Solver->DeactivateSolver();
+		}
+		
+		OnSolverChangedMode(FGameplayTag::EmptyTag, CurrentActiveSolverTag);
+		CurrentActiveSolverTag = FGameplayTag::EmptyTag;
+		PreviousSolverTag = FGameplayTag::EmptyTag;
+	}
+
 	Super::OnMovementModeChangedSimulated_Implementation(PreviousMovementMode);
 }
 
 void UGMCE_OrganicMovementCmp::PostMovementUpdate_Implementation(float DeltaSeconds)
 {
 	Super::PostMovementUpdate_Implementation(DeltaSeconds);
+
+	if (GetMovementMode() == GetSolverMovementMode() && GetActiveSolver())
+	{
+		FSolverState State = GetSolverState();
+		GetActiveSolver()->PostMovementUpdate(State, DeltaSeconds);
+	}
 }
 
 void UGMCE_OrganicMovementCmp::PostSimulatedMoveExecution_Implementation(const FGMC_PawnState& OutputState,
 	bool bCumulativeUpdate, float DeltaTime, double Timestamp)
 {
 	Super::PostSimulatedMoveExecution_Implementation(OutputState, bCumulativeUpdate, DeltaTime, Timestamp);
+
+	if (GetMovementMode() == GetSolverMovementMode() && GetActiveSolver())
+	{
+		FSolverState State = GetSolverState();
+		GetActiveSolver()->PostMovementUpdateSimulated(State, DeltaTime);
+	}
 }
 
 float UGMCE_OrganicMovementCmp::GetMaxSpeed() const
@@ -696,6 +790,7 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 						GetMoveTimestamp(), *Solver->GetName(), *CurrentActiveSolverTag.ToString(), *NewSolverTag.ToString())
 					
 					// Solver is changing into some different sub-mode.
+					PreviousSolverTag = CurrentActiveSolverTag;
 					OnSolverChangedMode(NewSolverTag, CurrentActiveSolverTag);
 					CurrentActiveSolverTag = NewSolverTag;
 					Solver->ActivateSolver(NewSolverTag);
@@ -703,13 +798,15 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 			}
 			else
 			{
-				GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("[%s] SOLVER: %s surrendered control of movement"),
+				GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("[%f] SOLVER: %s surrendered control of movement"),
 					GetMoveTimestamp(), *Solver->GetName())
+
+				Solver->DeactivateSolver();
 				
 				OnSolverChangedMode(FGameplayTag::EmptyTag, CurrentActiveSolverTag);
+				PreviousSolverTag = CurrentActiveSolverTag;
 				CurrentActiveSolverTag = FGameplayTag::EmptyTag;
 			}
-			GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("[%f] SOLVER: post-physics location: %s"), GetMoveTimestamp(), *GetActorLocation_GMC().ToCompactString())
 		}
 		else
 		{
@@ -936,18 +1033,12 @@ void UGMCE_OrganicMovementCmp::PreProcessRootMotion(const FGMC_AnimMontageInstan
 {
 	// If we've got a bound delegate to handle modifying root motion, call it. This is used by GMCExAnim to
 	// handle motion warping.
-	if (ProcessRootMotionPreConvertToWorld.IsBound() && GetOwner()->GetNetMode() == NM_Standalone)
+	if (ProcessRootMotionPreConvertToWorld.IsBound())
 	{
+		bool bUsePredictedIfPresent = GetOwner()->GetNetMode() != NM_Standalone;
 		const FTransform MeshRelativeTransform = SkeletalMesh->GetRelativeTransform();
-		const FTransform WarpedRootMotionTransform = ProcessRootMotionPreConvertToWorld.Execute(InOutRootMotionParams.GetRootMotionTransform(), GetActorTransform_GMC(), MeshRelativeTransform, this, DeltaSeconds);
+		const FTransform WarpedRootMotionTransform = ProcessRootMotionPreConvertToWorld.Execute(InOutRootMotionParams.GetRootMotionTransform(), GetActorTransform_GMC(), MeshRelativeTransform, this, DeltaSeconds, bUsePredictedIfPresent);
 
-		if (!WarpedRootMotionTransform.Equals(InOutRootMotionParams.GetRootMotionTransform()))
-		{
-			GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("Root Motion Warped: at %s: %s %s -> %s %s"), *GetActorLocation_GMC().ToCompactString(),
-				*InOutRootMotionParams.GetRootMotionTransform().GetTranslation().ToCompactString(), *InOutRootMotionParams.GetRootMotionTransform().GetRotation().Rotator().ToCompactString(),
-				*WarpedRootMotionTransform.GetTranslation().ToCompactString(), *WarpedRootMotionTransform.GetRotation().Rotator().ToCompactString())
-		}
-		
 		InOutRootMotionParams.Set(WarpedRootMotionTransform);
 	}
 
@@ -1758,6 +1849,7 @@ bool UGMCE_OrganicMovementCmp::TryActivateSolver(const FGameplayTag& SolverTag)
 	{
 		OnSolverChangedMode(FGameplayTag::EmptyTag, CurrentActiveSolverTag);
 		CurrentActiveSolverTag = FGameplayTag::EmptyTag;
+		PreviousSolverTag = FGameplayTag::EmptyTag;
 		CurrentActiveSolver = nullptr;
 		return true;
 	}
@@ -1771,9 +1863,9 @@ bool UGMCE_OrganicMovementCmp::TryActivateSolver(const FGameplayTag& SolverTag)
 				GMC_LOG(LogGMCExtended, GetOwner(), Verbose, TEXT("[%f] SOLVER: trying to activate solver %s for tag %s"),
 					GetMoveTimestamp(), *Solver->GetName(), *SolverTag.ToString())
 				
-				FGameplayTag OldMode = CurrentActiveSolverTag;
+				PreviousSolverTag = CurrentActiveSolverTag;
 				CurrentActiveSolverTag = Solver->GetPreferredSolverTag();
-				OnSolverChangedMode(CurrentActiveSolverTag, OldMode);
+				OnSolverChangedMode(CurrentActiveSolverTag, PreviousSolverTag);
 				Solver->ActivateSolver(CurrentActiveSolverTag);
 				return true;
 			}

@@ -73,11 +73,95 @@ void UGMCE_BaseSolver::MovementUpdateSimulated(FSolverState& State, float DeltaT
 	NativeMovementUpdateSimulated(State, DeltaTime);			
 }
 
+void UGMCE_BaseSolver::PostMovementUpdate(FSolverState& State, float DeltaTime)
+{
+	if (bUseBlueprintEvents)
+	{
+		BlueprintPostMovementUpdate(State, DeltaTime);
+	}
+
+	NativePostMovementUpdate(State, DeltaTime);
+}
+
+void UGMCE_BaseSolver::PostMovementUpdateSimulated(FSolverState& State, float DeltaTime)
+{
+	if (bUseBlueprintEvents)
+	{
+		BlueprintPostMovementUpdateSimulated(State, DeltaTime);
+	}
+
+	NativePostMovementUpdateSimulated(State, DeltaTime);
+}
+
+void UGMCE_BaseSolver::NativePostMovementUpdate(FSolverState& State, float DeltaTime)
+{
+}
+
+void UGMCE_BaseSolver::NativePostMovementUpdateSimulated(FSolverState& State, float DeltaTime)
+{
+}
+
 void UGMCE_BaseSolver::NativeMovementUpdateSimulated(FSolverState& State, float DeltaTime)
 {
 }
 
 void UGMCE_BaseSolver::NativeMovementUpdate(FSolverState& State, float DeltaTime)
+{
+}
+
+void UGMCE_BaseSolver::PredictionTick(FSolverState& State, float DeltaTime)
+{
+	if (bUseBlueprintEvents)
+	{
+		BlueprintPredictionTick(State, DeltaTime);
+	}
+
+	NativePredictionTick(State, DeltaTime);
+}
+
+void UGMCE_BaseSolver::SimulationTick(FSolverState& State, float DeltaTime)
+{
+	if (bUseBlueprintEvents)
+	{
+		BlueprintSimulationTick(State, DeltaTime);
+	}
+
+	NativeSimulationTick(State, DeltaTime);
+}
+
+void UGMCE_BaseSolver::AncillaryTick(FSolverState& State, float DeltaTime)
+{
+	if (bUseBlueprintEvents)
+	{
+		BlueprintAncillaryTick(State, DeltaTime);
+	}
+
+	NativeAncillaryTick(State, DeltaTime);
+}
+
+void UGMCE_BaseSolver::DeactivateSolver()
+{
+	if (bUseBlueprintEvents)
+	{
+		BlueprintDeactivateSolver();
+	}
+
+	NativeDeactivateSolver();
+}
+
+void UGMCE_BaseSolver::NativeSimulationTick(FSolverState& State, float DeltaTime)
+{
+}
+
+void UGMCE_BaseSolver::NativePredictionTick(FSolverState& State, float DeltaTime)
+{
+}
+
+void UGMCE_BaseSolver::NativeAncillaryTick(FSolverState& State, float DeltaTime)
+{
+}
+
+void UGMCE_BaseSolver::NativeDeactivateSolver()
 {
 }
 

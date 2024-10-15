@@ -138,8 +138,18 @@ public:
 	void MovementUpdate(FSolverState& State, float DeltaTime);
 
 	void MovementUpdateSimulated(FSolverState& State, float DeltaTime);
+
+	void PostMovementUpdate(FSolverState& State, float DeltaTime);
 	
-	
+	void PostMovementUpdateSimulated(FSolverState& State, float DeltaTime);
+
+	void PredictionTick(FSolverState& State, float DeltaTime);
+
+	void SimulationTick(FSolverState& State, float DeltaTime);
+
+	void AncillaryTick(FSolverState& State, float DeltaTime);
+
+	void DeactivateSolver();
 
 protected:
 
@@ -231,6 +241,19 @@ public:
 	virtual void NativeMovementUpdate(FSolverState& State, float DeltaTime);
 
 	virtual void NativeMovementUpdateSimulated(FSolverState& State, float DeltaTime);
+
+	virtual void NativePostMovementUpdate(FSolverState& State, float DeltaTime);
+	
+	virtual void NativePostMovementUpdateSimulated(FSolverState& State, float DeltaTime);
+
+	virtual void NativeSimulationTick(FSolverState& State, float DeltaTime);
+
+	virtual void NativePredictionTick(FSolverState& State, float DeltaTime);
+
+	virtual void NativeAncillaryTick(FSolverState& State, float DeltaTime);
+
+	virtual void NativeDeactivateSolver();
+	
 #pragma endregion
 	
 	// ------ BLUEPRINT
@@ -287,6 +310,24 @@ public:
 
 	UFUNCTION(BlueprintImplementableEvent, DisplayName="Simulated Movement Update", Category="GMC Extended|Solvers")
 	void BlueprintMovementUpdateSimulated(UPARAM(ref) FSolverState& State, float DeltaTime);
+
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Post Movement Update", Category="GMC Extended|Solvers")
+	void BlueprintPostMovementUpdate(UPARAM(ref) FSolverState& State, float DeltaTime);
+	
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Post Simulated Movement Update", Category="GMC Extended|Solvers")
+	void BlueprintPostMovementUpdateSimulated(UPARAM(ref) FSolverState& State, float DeltaTime);
+
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Simulation Tick", Category="GMC Extended|Solvers")
+	void BlueprintSimulationTick(UPARAM(ref) FSolverState& State, float DeltaTime);
+
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Prediction Tick", Category="GMC Extended|Solvers")
+	void BlueprintPredictionTick(UPARAM(ref) FSolverState& State, float DeltaTime);
+
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="Ancillary Tick", Category="GMC Extended|Solvers")
+	void BlueprintAncillaryTick(UPARAM(ref) FSolverState& State, float DeltaTime);
+
+	UFUNCTION(BlueprintImplementableEvent, DisplayName="On Deactivate Solver", Category="GMC Extended|Solvers")
+	void BlueprintDeactivateSolver();
 	
 	UGMCE_OrganicMovementCmp* GetMovementComponent() const { return MovementComponent; }
 
@@ -728,4 +769,5 @@ protected:
 	FGameplayTag SolverMovementModeTag;
 
 };
+
 
