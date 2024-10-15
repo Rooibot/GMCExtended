@@ -465,9 +465,18 @@ void UGMCE_OrganicMovementCmp::MovementUpdateSimulated_Implementation(float Delt
 			bool bNeedsActivate = false;
 			if (CurrentActiveSolverTag != PreviousSolverTag)
 			{
-				OnSolverChangedMode(PreviousSolverTag, CurrentActiveSolverTag);
+				OnSolverChangedMode(CurrentActiveSolverTag, PreviousSolverTag);
+
+				UGMCE_BaseSolver* OldSolver = GetSolverForTag(PreviousSolverTag);
+				UGMCE_BaseSolver* NewSolver = GetSolverForTag(CurrentActiveSolverTag);
+
+				if (OldSolver != NewSolver)
+				{
+					if (OldSolver) OldSolver->DeactivateSolver();
+					if (NewSolver) bNeedsActivate = true;
+				}
+				
 				PreviousSolverTag = CurrentActiveSolverTag;
-				bNeedsActivate = true;			
 			}
 		
 			if (const auto ActiveSolver = GetActiveSolver())
@@ -479,6 +488,18 @@ void UGMCE_OrganicMovementCmp::MovementUpdateSimulated_Implementation(float Delt
 		}
 		else if (PreviousSolverTag != FGameplayTag::EmptyTag || CurrentActiveSolverTag != FGameplayTag::EmptyTag)
 		{
+			if (UGMCE_BaseSolver* Solver = GetSolverForTag(PreviousSolverTag))
+			{
+				Solver->DeactivateSolver();
+			}
+			if (PreviousSolverTag != CurrentActiveSolverTag)
+			{
+				if (UGMCE_BaseSolver* Solver = GetSolverForTag(CurrentActiveSolverTag))
+				{
+					Solver->DeactivateSolver();
+				}				
+			}
+			
 			OnSolverChangedMode(FGameplayTag::EmptyTag, CurrentActiveSolverTag);
 			CurrentActiveSolverTag = FGameplayTag::EmptyTag;
 			PreviousSolverTag = FGameplayTag::EmptyTag;
@@ -631,12 +652,17 @@ void UGMCE_OrganicMovementCmp::OnMovementModeChangedSimulated_Implementation(EGM
 
 		if (bNeedsActivate)
 		{
+			if (auto Solver = GetSolverForTag(PreviousSolverTag))
+			{
+				Solver->DeactivateSolver();
+			}
+			
 			if (auto Solver = GetActiveSolver())
 			{
 				Solver->ActivateSolver(GetActiveSolverTag());
 			}
-			PreviousSolverTag = CurrentActiveSolverTag;
 		}
+		PreviousSolverTag = CurrentActiveSolverTag;
 	}
 	else if (GetMovementMode() != GetSolverMovementMode() && PreviousMovementMode == GetSolverMovementMode())
 	{

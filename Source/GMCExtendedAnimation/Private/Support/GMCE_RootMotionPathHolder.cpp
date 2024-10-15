@@ -353,6 +353,7 @@ bool UGMCE_RootMotionPathHolder::GetPredictedPositionForBlendOut(float& OutBlend
 		return true;
 	}
 
+	bool bFound = false;
 	if (PredictionSequence)
 	{
 		for (const auto& Notify : PredictionSequence->Notifies)
@@ -361,10 +362,16 @@ bool UGMCE_RootMotionPathHolder::GetPredictedPositionForBlendOut(float& OutBlend
 			if (BlendOutNotify && (Notify.GetTriggerTime() < CachedPredictedBlendOut || CachedPredictedBlendOut < 0.f))
 			{
 				CachedPredictedBlendOut = Notify.GetTriggerTime();
+				bFound = true;
 			}
 		}
 	}
 
+	if (!bFound)
+	{
+		CachedPredictedBlendOut = PredictedSamples.Samples.Last().AccumulatedSeconds;
+	}
+	
 	OutBlendPosition = CachedPredictedBlendOut;
 	return CachedPredictedBlendOut > 0.f;
 }
