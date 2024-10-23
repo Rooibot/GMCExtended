@@ -12,6 +12,8 @@ DECLARE_DELEGATE_RetVal_ThreeParams(FTransform, FOnProcessRootMotionEx, const FT
 DECLARE_DELEGATE_TwoParams(FOnSyncDataApplied, const FGMC_PawnState&, EGMC_NetContext)
 DECLARE_DELEGATE(FOnBindReplicationData)
 
+DECLARE_LOG_CATEGORY_EXTERN(LogGMCExtended, Log, All)
+
 class UGMCE_BaseSolver;
 
 UCLASS(ClassGroup=(GMCExtended), meta=(BlueprintSpawnableComponent, DisplayName="GMCExtended Organic Movement Component"))

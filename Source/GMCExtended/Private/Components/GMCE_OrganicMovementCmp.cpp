@@ -4,6 +4,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Support/GMCE_UtilityLibrary.h"
 
+DEFINE_LOG_CATEGORY(LogGMCExtended);
 
 // Sets default values for this component's properties
 UGMCE_OrganicMovementCmp::UGMCE_OrganicMovementCmp()
@@ -535,7 +536,7 @@ void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 		{
 			FVector ControlDirection = GetControllerRotation_GMC().Vector();
 			const float ControlAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(ControlDirection, UpdatedComponent->GetForwardVector()));
-			if (ControlAngle > TurnInPlaceAngleThreshold)
+			if (ControlAngle > TurnInPlaceAngleThreshold && TurnInPlaceAngleThreshold > 0.f)
 			{
 				Velocity = FVector::ZeroVector;
 				HandleTurnInPlace(DeltaSeconds);
@@ -585,14 +586,22 @@ void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 
 void UGMCE_OrganicMovementCmp::RotateYawTowardsDirection(const FVector& Direction, float Rate, float DeltaTime)
 {
+	const FRotator OldRotation = GetActorRotation_GMC();
 	Super::RotateYawTowardsDirection(Direction, Rate, DeltaTime);
+
+	GMC_LOG(LogGMCExtended, GetOwner(), VeryVerbose, TEXT("[%f] +%f Rotate to %s @ %f: %s -> %s"),
+		GetMoveTimestamp(), DeltaTime, *Direction.ToCompactString(), Rate, *OldRotation.ToCompactString(), *GetActorRotation_GMC().ToCompactString())
 
 	CalculateAimYawRemaining(Direction);
 }
 
 bool UGMCE_OrganicMovementCmp::RotateYawTowardsDirectionSafe(const FVector& Direction, float Rate, float DeltaTime)
 {
+	const FRotator OldRotation = GetActorRotation_GMC();
 	const bool bResult = Super::RotateYawTowardsDirectionSafe(Direction, Rate, DeltaTime);
+
+	GMC_LOG(LogGMCExtended, GetOwner(), VeryVerbose, TEXT("[%f] +%f Rotate to %s @ %f: %s -> %s"),
+		GetMoveTimestamp(), DeltaTime, *Direction.ToCompactString(), Rate, *OldRotation.ToCompactString(), *GetActorRotation_GMC().ToCompactString())
 
 	CalculateAimYawRemaining(Direction);
 	
