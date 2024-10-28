@@ -135,8 +135,14 @@ public:
 	float FacingAngleOffsetThreshold { 25.f };
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Turn-in-Place")
+	/// If TurnInPlaceType is not "None" and bOrientToControllerDirection is true, the character will
+	/// remain facing the way they currently appear to be until the controller rotation deviates by at least
+	/// this much.
+	float TurnInPlaceAngleThreshold { 45.f };
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Turn-in-Place")
 	/// If turn in place is enabled, this determines how the turn-in-place is handled. 
-	EGMCE_TurnInPlaceType TurnInPlaceType { EGMCE_TurnInPlaceType::MovementComponent };
+	EGMCE_TurnInPlaceType TurnInPlaceType { EGMCE_TurnInPlaceType::None };
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Turn-in-Place")
 	/// If this is a non-zero positive number and bOrientToControlRotationDirection is true, we will wait
@@ -180,13 +186,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Movement")
 	void SetStrafingMovement(bool bStrafingEnabled = false);
 
-	bool ShouldTurnInPlace() const;
-	void CalculateTurnInPlace(float DeltaSeconds);
-	void ApplyTurnInPlace(float DeltaSeconds, bool bSimulated);
-	void EndTurnInPlace(bool bSimulated = false);
+	virtual bool ShouldTurnInPlace() const;
+	virtual void CalculateTurnInPlace(float DeltaSeconds);
+	virtual void ApplyTurnInPlace(float DeltaSeconds, bool bSimulated);
+	virtual void EndTurnInPlace(bool bSimulated = false);
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Movement")
-	float GetTurnInPlaceDuration() const;
+	virtual float GetTurnInPlaceDuration() const;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement|Tempo")
 	/// If this is true, then if the movement direction differs from the character's forward vector

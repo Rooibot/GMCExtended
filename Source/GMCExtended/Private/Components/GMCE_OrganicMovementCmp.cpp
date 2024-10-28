@@ -857,25 +857,25 @@ float UGMCE_OrganicMovementCmp::GetInputAccelerationCustom_Implementation() cons
 
 void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 {
-	if (IsMovingOnGround())
+	if (IsMovingOnGround() && ShouldTurnInPlace())
 	{
 		// If we're using "Require Facing Before Move" and we're on the ground and we're not currently
 		// moving, we want to check the direction we're TRYING to face and see if we're offset at all.
 		if (bRequireFacingBeforeMove && Velocity.IsNearlyZero())
 		{
-			if (bOrientToControlRotationDirection)
+			if (bOrientToControlRotationDirection && TurnInPlaceAngleThreshold > 0.f)
 			{
 				UpdateTurnInPlaceState();
 				FVector ControlDirection = GetControllerRotation_GMC().Vector();
 				const float ControlAngle = FMath::Abs(UGMCE_UtilityLibrary::GetAngleDifferenceXY(ControlDirection, UpdatedComponent->GetForwardVector()));
-				if (ControlAngle > FacingAngleOffsetThreshold || IsTurningInPlace() || TurnInPlaceState == EGMCE_TurnInPlaceState::Starting)
+				if ((TurnInPlaceAngleThreshold > 0.f && ControlAngle > TurnInPlaceAngleThreshold) || IsTurningInPlace() || TurnInPlaceState == EGMCE_TurnInPlaceState::Starting)
 				{
 					Velocity = FVector::ZeroVector;
 					CalculateTurnInPlace(DeltaSeconds);
 					return;
 				}
 			}
-			else
+			else if (!bOrientToControlRotationDirection && FacingAngleOffsetThreshold > 0.f)
 			{
 				FVector InputDirection = GetProcessedInputVector();
 				bool bFinishTurn = false;
@@ -1017,7 +1017,7 @@ void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
 		return;
 	}
 
-	if (GetOwnerRole() != ROLE_SimulatedProxy && (IsTurningInPlace() || TurnInPlaceState == EGMCE_TurnInPlaceState::Starting || (bOrientToControlRotationDirection && TurnInPlaceDelay > 0.f && Velocity.IsNearlyZero() && (!HasRootMotion() || RootMotionMetaData.bApplyRotationWithRootMotion))))
+	if (GetOwnerRole() != ROLE_SimulatedProxy && (IsTurningInPlace() || TurnInPlaceState == EGMCE_TurnInPlaceState::Starting || (bOrientToControlRotationDirection && Velocity.IsNearlyZero() && (!HasRootMotion() || RootMotionMetaData.bApplyRotationWithRootMotion))))
 	{
 		CalculateTurnInPlace(DeltaSeconds);
 		return;
@@ -1966,8 +1966,19 @@ void UGMCE_OrganicMovementCmp::SetStrafingMovement(bool bStrafingEnabled)
 
 bool UGMCE_OrganicMovementCmp::ShouldTurnInPlace() const
 {
-	if (TurnInPlaceType == EGMCE_TurnInPlaceType::None || TurnInPlaceDelay == 0.f || TurnInPlaceRotationRate == 0.f) return false;
+	// Turn in place is disabled.
+	if (TurnInPlaceType == EGMCE_TurnInPlaceType::None) return false;
 
+	// Turn in place is driven by movement component but has an instant rotation rate.
+	if (TurnInPlaceType == EGMCE_TurnInPlaceType::MovementComponent && TurnInPlaceRotationRate <= 0.f) return false;
+
+	// We're in "Orient to Control Rotation Direction" mode but have no angle or delay set.
+	if (bOrientToControlRotationDirection && (TurnInPlaceAngleThreshold <= 0.f && TurnInPlaceDelay <= 0.f)) return false;
+
+	// We're in "Require Facing Before Move" mode and our facing angle offset threshold is invalid.
+	if (bRequireFacingBeforeMove && FacingAngleOffsetThreshold <= 0.f) return false;
+
+	// Hey, let's turn in place.
 	return true;
 }
 
