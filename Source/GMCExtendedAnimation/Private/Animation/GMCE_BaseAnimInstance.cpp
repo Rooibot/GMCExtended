@@ -1,5 +1,6 @@
 ﻿#include "GMCE_BaseAnimInstance.h"
 
+#include "KismetAnimationLibrary.h"
 #include "Kismet/KismetMathLibrary.h"
 
 void UGMCE_BaseAnimInstance::NativeInitializeAnimation()
@@ -36,6 +37,8 @@ void UGMCE_BaseAnimInstance::NativeInitializeAnimation()
 			MovementComponent = Cast<UGMCE_OrganicMovementCmp>(OwnerPawn->GetComponentByClass<UGMCE_OrganicMovementCmp>());
 		}
 	}
+
+	bIsFirstUpdate = true;
 }
 
 void UGMCE_BaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
@@ -65,23 +68,29 @@ void UGMCE_BaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	FVector WorldDirection = UKismetMathLibrary::Conv_RotatorToVector(WorldRotation).GetSafeNormal2D();
 
 	AimYawRemaining = MovementComponent->GetAimYawRemaining();
+	ComponentYawRemaining = MovementComponent->GetComponentYawRemaining();
 	
-	const FVector InputVector = MovementComponent->GetRawInputVector();
-	InputDirection = InputVector.GetSafeNormal();
-	InputAcceleration = InputVector * MovementComponent->GetInputAcceleration();
+	InputAcceleration = MovementComponent->GetProcessedInputVector() * MovementComponent->GetInputAcceleration();
+	InputDirection = InputAcceleration.GetSafeNormal();
 
 	AimOffset = UKismetMathLibrary::NormalizedDeltaRotator(AimRotation, WorldRotation);
 
-	bTurnInPlace = (AimYawRemaining != 0.f) && WorldVelocity.IsNearlyZero() && (ComponentYawDeltaRate != 0.f);
+	WorldGroundVelocity = WorldVelocity * FVector(1.f, 1.f, 0.f);
+
+	LocomotionAngle = MovementComponent->GetLocomotionAngle();
+	OrientationAngle = MovementComponent->GetOrientationAngle();
+
+	bTurnInPlace = MovementComponent->IsTurningInPlace();
 	
 	if (GetWorld()->IsGameWorld())
 	{
 		const auto ComponentTransform = MovementComponent->UpdatedComponent->GetComponentTransform();
 		LocalVelocity = ComponentTransform.InverseTransformVector(WorldVelocity);
+		LocalGroundVelocity = LocalVelocity * FVector(1.f, 1.f, 0.f);
 		LocalAcceleration = ComponentTransform.InverseTransformVector(WorldAcceleration);
 		WorldLocation = MovementComponent->UpdatedComponent->GetComponentLocation();
-		WorldInputDirection = MovementComponent->GetControllerRotation_GMC().RotateVector(InputDirection);
-		WorldInputAcceleration = MovementComponent->GetControllerRotation_GMC().RotateVector(InputAcceleration);
+		WorldInputDirection = MovementComponent->GetControllerRotation_GMC().RotateVector(InputDirection).GetSafeNormal2D();
+		WorldInputAcceleration = MovementComponent->GetControllerRotation_GMC().RotateVector(InputAcceleration).GetSafeNormal2D();
 		LocalInputDirection = ComponentTransform.InverseTransformVector(WorldInputDirection);
 		LocalInputAcceleration = ComponentTransform.InverseTransformVector(WorldInputAcceleration);
 	}
@@ -89,13 +98,13 @@ void UGMCE_BaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	{
 		// We're an editor preview, there's no actual world transform to bother with.
 		LocalVelocity = WorldVelocity;
+		LocalGroundVelocity = WorldGroundVelocity;
 		LocalAcceleration = WorldAcceleration;
 		WorldLocation = FVector::ZeroVector;
 		WorldInputDirection = LocalInputDirection = InputDirection;
 		WorldInputAcceleration = LocalInputAcceleration = InputAcceleration;
 	}
 
-	LocalGroundVelocity = LocalVelocity * FVector(1.f, 1.f, 0.f);
 	LocalVelocityDirection = LocalVelocity.GetSafeNormal();
 	LocalGroundVelocityDirection = LocalGroundVelocity.GetSafeNormal();
 	

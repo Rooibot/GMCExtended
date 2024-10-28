@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "GMCExtended.h"
+#include "GMCExtendedLog.h"
 
 #define LOCTEXT_NAMESPACE "FGMCExtendedModule"
 
@@ -18,3 +19,4 @@ void FGMCExtendedModule::ShutdownModule()
 #undef LOCTEXT_NAMESPACE
 	
 IMPLEMENT_MODULE(FGMCExtendedModule, GMCExtended)
+DEFINE_LOG_CATEGORY(LogGMCExtended)

@@ -43,6 +43,8 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category="Motion Warping")
 	void OnWarpEnd(UGMCE_MotionWarpingComponent* Component, UGMCE_RootMotionModifier* Modifier) const;
 
+	virtual FString GetNotifyName_Implementation() const override;
+
 #if WITH_EDITOR
 	virtual void ValidateAssociatedAssets() override;
 #endif

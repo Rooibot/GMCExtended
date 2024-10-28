@@ -4,6 +4,7 @@
 #include "GMCE_RootMotionModifier_Warp.h"
 
 #include "GMCExtendedAnimation.h"
+#include "GMCExtendedAnimationLog.h"
 #include "GMCE_MotionWarpingComponent.h"
 #include "GMCE_MotionWarpingUtilities.h"
 
@@ -32,9 +33,10 @@ void UGMCE_RootMotionModifier_Warp::Update(const FGMCE_MotionWarpContext& Contex
 
 		// Get the warp point sent by the game
 		FTransform WarpPointTransformGame = WarpTargetPtr->GetTargetTransform();
+		FTransform Other = WarpTargetPtr->GetTargetTransformFromAnimation(Context.OwnerTransform, Context.MeshRelativeTransform, GetAnimation(), CurrentPosition);
 
 		// Initialize our target transform (where the root should end at the end of the window) with the warp point sent by the game
-		FTransform TargetTransform = WarpPointTransformGame;
+		FTransform TargetTransform = Other;
 
 		// Check if a warp point is defined in the animation. If so, we need to extract it and offset the target transform 
 		// the same amount the root bone is offset from the warp point in the animation
@@ -46,11 +48,14 @@ void UGMCE_RootMotionModifier_Warp::Update(const FGMCE_MotionWarpContext& Contex
 				{
 					if (WarpPointAnimProvider == EGMCE_MotionWarpProvider::Static)
 					{
-						CachedOffsetFromWarpPoint = UGMCE_MotionWarpingUtilities::CalculateRootTransformRelativeToWarpPointAtTime(PawnOwner, GetAnimation(), EndTime, WarpPointAnimTransform);
+						// CachedOffsetFromWarpPoint = UGMCE_MotionWarpingUtilities::CalculateRootTransformRelativeToWarpPointAtTime(PawnOwner, GetAnimation(), EndTime, WarpPointAnimTransform);
+						CachedOffsetFromWarpPoint = UGMCE_MotionWarpingUtilities::CalculateRootTransformRelativeToWarpPointAtTime(Context.MeshRelativeTransform, GetAnimation(), EndTime, WarpPointAnimTransform);
+
 					}
 					else if (WarpPointAnimProvider == EGMCE_MotionWarpProvider::Bone)
 					{
-						CachedOffsetFromWarpPoint = UGMCE_MotionWarpingUtilities::CalculateRootTransformRelativeToWarpPointAtTime(PawnOwner, GetAnimation(), EndTime, WarpPointAnimBoneName);
+						// CachedOffsetFromWarpPoint = UGMCE_MotionWarpingUtilities::CalculateRootTransformRelativeToWarpPointAtTime(PawnOwner, GetAnimation(), EndTime, WarpPointAnimBoneName);
+						CachedOffsetFromWarpPoint = UGMCE_MotionWarpingUtilities::CalculateRootTransformRelativeToWarpPointAtTime(Context.MeshRelativeTransform, Context.AnimationInstance, GetAnimation(), EndTime, WarpPointAnimBoneName);
 					}
 				}
 			}
@@ -82,7 +87,7 @@ void UGMCE_RootMotionModifier_Warp::OnTargetTransformChanged()
 	}	
 }
 
-FQuat UGMCE_RootMotionModifier_Warp::GetTargetRotation() const
+FQuat UGMCE_RootMotionModifier_Warp::GetTargetRotation(const FGMCE_MotionWarpContext& Context) const
 {
 	if (RotationType == EGMCE_MotionWarpRotationType::Default)
 	{
@@ -90,30 +95,20 @@ FQuat UGMCE_RootMotionModifier_Warp::GetTargetRotation() const
 	}
 	else if (RotationType == EGMCE_MotionWarpRotationType::Facing)
 	{
-		if (const AGMC_Pawn* PawnOwner = GetPawnOwner())
-		{
-			const FTransform& CharacterTransform = PawnOwner->GetActorTransform();
-			const FVector ToSyncPoint = (CachedTargetTransform.GetLocation() - CharacterTransform.GetLocation()).GetSafeNormal2D();
-			return FRotationMatrix::MakeFromXZ(ToSyncPoint, FVector::UpVector).ToQuat();
-		}
+		const FTransform& CharacterTransform = Context.OwnerTransform;
+		const FVector ToSyncPoint = (CachedTargetTransform.GetLocation() - CharacterTransform.GetLocation()).GetSafeNormal2D();
+		return FRotationMatrix::MakeFromXZ(ToSyncPoint, FVector::UpVector).ToQuat();
 	}
 
 	return FQuat::Identity;	
 }
 
-FQuat UGMCE_RootMotionModifier_Warp::WarpRotation(const FTransform& RootMotionDelta, const FTransform& RootMotionTotal,
+FQuat UGMCE_RootMotionModifier_Warp::WarpRotation(const FGMCE_MotionWarpContext& WarpContext, const FTransform& RootMotionDelta, const FTransform& RootMotionTotal,
 	float DeltaSeconds)
 {
-	AGMC_Pawn* PawnOwner = GetPawnOwner();
-	IGMCE_MotionWarpSubject* MotionWarpInterface =Cast<IGMCE_MotionWarpSubject>(PawnOwner);
-	if (PawnOwner == nullptr)
-	{
-		return FQuat::Identity;
-	}
-	
 	const FQuat TotalRootMotionRotation = RootMotionTotal.GetRotation();
-	const FQuat CurrentRotation = PawnOwner->GetActorQuat() * MotionWarpInterface->MotionWarping_GetRotationOffset();
-	const FQuat TargetRotation = CurrentRotation.Inverse() * (GetTargetRotation() * MotionWarpInterface->MotionWarping_GetRotationOffset());
+	const FQuat CurrentRotation = WarpContext.OwnerTransform.GetRotation() * WarpContext.MeshRelativeTransform.GetRotation();
+	const FQuat TargetRotation = CurrentRotation.Inverse() * (GetTargetRotation(WarpContext) * WarpContext.MeshRelativeTransform.GetRotation());
 	const float TimeRemaining = (EndTime - PreviousPosition) * WarpRotationTimeMultiplier;
 	const float Alpha = FMath::Clamp(DeltaSeconds / TimeRemaining, 0.f, 1.f);
 	FQuat TargetRotThisFrame = FQuat::Slerp(TotalRootMotionRotation, TargetRotation, Alpha);
@@ -140,3 +135,40 @@ FQuat UGMCE_RootMotionModifier_Warp::WarpRotation(const FTransform& RootMotionDe
 	
 	return (DeltaOut * RootMotionDelta.GetRotation());
 }
+
+FString UGMCE_RootMotionModifier_Warp::DisplayString() const
+{
+	if (WarpTargetName != NAME_None && !WarpTargetName.ToString().IsEmpty()) return WarpTargetName.ToString();
+	
+	return Super::DisplayString();
+}
+
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+void UGMCE_RootMotionModifier_Warp::PrintLog(const FString& Name, const FTransform& OriginalRootMotion, const FTransform& WarpedRootMotion) const
+{
+	if (const AGMC_Pawn* Pawn = GetPawnOwner())
+	{
+		UGMCE_OrganicMovementCmp* MovementCmp = Cast<UGMCE_OrganicMovementCmp>(Pawn->GetMovementComponent());
+		USkeletalMeshComponent* MeshCmp = Pawn->GetComponentByClass<USkeletalMeshComponent>();
+		
+		const float CapsuleHalfHeight = MovementCmp->GetRootCollisionHalfHeight(true);
+		const FVector CurrentLocation = (Pawn->GetActorLocation() - FVector(0.f, 0.f, CapsuleHalfHeight));
+		const FVector CurrentToTarget = (GetTargetLocation() - CurrentLocation).GetSafeNormal2D();
+		const FVector FutureLocation = CurrentLocation + (MeshCmp->ConvertLocalRootMotionToWorld(WarpedRootMotion)).GetTranslation();
+		const FRotator CurrentRotation = Pawn->GetActorRotation();
+		const FRotator FutureRotation = (WarpedRootMotion.GetRotation() * Pawn->GetActorQuat()).Rotator();
+		const float Dot = FVector::DotProduct(Pawn->GetActorForwardVector(), CurrentToTarget);
+		const float CurrentDist2D = FVector::Dist2D(GetTargetLocation(), CurrentLocation);
+		const float FutureDist2D = FVector::Dist2D(GetTargetLocation(), FutureLocation);
+		const float DeltaSeconds = Pawn->GetWorld()->GetDeltaSeconds();
+		const float Speed = WarpedRootMotion.GetTranslation().Size() / DeltaSeconds;
+		const float EndTimeOffset = CurrentPosition - EndTime;
+
+		UE_LOG(LogGMCExAnimation, Log, TEXT("%s NetMode: %d Char: %s Anim: %s Win: [%f %f][%f %f] DT: %f WT: %f ETOffset: %f Dist2D: %f Z: %f FDist2D: %f FZ: %f Dot: %f Delta: %s (%f) FDelta: %s (%f) Speed: %f Loc: %s FLoc: %s Rot: %s FRot: %s"),
+			*Name, (int32)Pawn->GetWorld()->GetNetMode(), *GetNameSafe(Pawn), *GetNameSafe(AnimationSequence.Get()), StartTime, EndTime, PreviousPosition, CurrentPosition, DeltaSeconds, Pawn->GetWorld()->GetTimeSeconds(), EndTimeOffset,
+			CurrentDist2D, (GetTargetLocation().Z - CurrentLocation.Z), FutureDist2D, (GetTargetLocation().Z - FutureLocation.Z), Dot,
+			*OriginalRootMotion.GetTranslation().ToString(), OriginalRootMotion.GetTranslation().Size(), *WarpedRootMotion.GetTranslation().ToString(), WarpedRootMotion.GetTranslation().Size(), Speed,
+			*CurrentLocation.ToString(), *FutureLocation.ToString(), *CurrentRotation.ToCompactString(), *FutureRotation.ToCompactString());
+	}
+}
+#endif

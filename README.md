@@ -27,13 +27,15 @@ This is an extension of the above `UGCME_CoreComponent`, adding a few things:
 * Stop/pivot prediction (for distance matching), available via 
 * Trajectory prediction (for motion trajectory)
 * Debug visualization options for the above two
-* A very, _very_ basic ragdoll mode
+* A framework to build an intelligent turn-in-place on.
+* Strafing speed limits, to alter maximum speed based on angle offset from actor forward.
+* A ragdoll mode which optionally can keep ragdoll position in-sync in multiplayer, to allow recovery from ragdoll. 
 
 **Trajectory:**  
 [![Trajectory example video](http://img.youtube.com/vi/y0oFou7ww64/0.jpg)](https://www.youtube.com/watch?v=y0oFou7ww64)
 
 **Ragdoll:**  
-[![Ragdoll example video](http://img.youtube.com/vi/Vipoc2ISJp0/0.jpg)](https://www.youtube.com/watch?v=Vipoc2ISJp0)
+[![Ragdoll example video](http://img.youtube.com/vi/6Zn3mx__sKc/0.jpg)](https://www.youtube.com/watch?v=6Zn3mx__sKc)
 
 Some details...
 
@@ -51,15 +53,15 @@ If `Trajectory Enabled` is true, the component will keep historical samples; if 
 
 There's also an `FGMCE_MovementSample` which serves as the data storage container for the trajectory, and which can be cast into a stock Unreal `FTrajectorySample` or the newer `FPoseSearchQueryTrajectorySample` as-needed, as well as an `FGMCE_MovementSampleCollection` which can similarly be cast into an `FTrajectorySampleRange` or the newer `FPoseSearchQueryTrajectory`.
 
-For blueprint use, there are also two blueprint functions provided to turn the GMCEx structures into standard Epic Motion Trajectory ones.
+For blueprint use, there are also two blueprint functions provided to turn the GMCEx structures into standard Epic Motion Trajectory ones. The resulting trajectory can be fed directly into the Motion Matching animation node.
 
 If `Draw Debug Predictions` is enabled with precalculations enabled, the component will draw a pathway showing historical movement and predicted trajectory.
 
 #### Ragdolling
 
-***Note:** This functionality was hastily written as a hypothetical example for soemone on the GMC Discord, and could definitely be improved on. Maybe by you! Feel free to fork, modify, and make a merge request!*
-
 This component uses the GMC `Custom1` movement mode for ragdolling logic; `Enable Ragdoll` and `Disable Ragdoll` will toggle the character into ragdoll mode or back to normal grounded movement; it will make an attempt to preserve velocity when toggling ragdolling on. Which movement mode is used can be changed by overriding `GetRagdollMovementMode` to return something other than `Custom1`. 
+
+This differs significantly from the original ragdoll implementation that was in older versions of GMCExtended; enough people were using that basic example that it seemed worth replacing with a more solid solution. However, the functionality is backwards-compatible and thus if you were already using it, it should Just Work.
 
 ### UGMCE_UtilityLibrary
 
@@ -73,4 +75,4 @@ This module provides useful animation implementations atop GMC. Right now, there
 
 The motion warping component provides a fundamentally similar implementation to Epic's stock motion warping component, albeit automatically integrating with GMC; this allows the motion warp targets to be replicated in GMC moves alongside montage data, ensuring they stay in sync and the root motion warping can be applied with a minimal number of corrections. Currently, the implementation only provides Skew Warp and Scale warping operations; as these are really the only ones anyone uses in Epic's own plugin, that seemed a sufficient start.
 
-It is worth noting that for this functionality to work, your GMC movement component must currently inherit from GMCEx's `UGMCE_OrganicMovementComponent`; this is because ensuring it worked with GMC's own root motion montage support required overriding `MontageUpdate` in order to add an optional root motion preprocessing hook. However, it will also use the Core Component Shared Variable functionality to automatically hook for binding registration, so merely adding the motion warping component alongside a GMCEx organic movement component will have them automatically negotiate all the necessary links between the two for themselves.
+It is worth noting that for this functionality to work, you will need to either add some functionality to your own GMC movement component in C++, *or* have it inherit from the GMCEx version of the Organic Movement Component.

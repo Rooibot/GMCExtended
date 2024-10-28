@@ -15,6 +15,7 @@ public class GMCExtended : ModuleRules
 				// ... add public include paths required here ...
 				Path.Combine(ModuleDirectory, "Public/Components"),
 				Path.Combine(ModuleDirectory, "Public/Interfaces"),
+				Path.Combine(ModuleDirectory, "Public/Solvers"),
 				Path.Combine(ModuleDirectory, "Public/Support")
 			}
 			);
@@ -25,6 +26,7 @@ public class GMCExtended : ModuleRules
 				// ... add other private include paths required here ...
 				Path.Combine(ModuleDirectory, "Private/Components"),
 				Path.Combine(ModuleDirectory, "Private/Interfaces"),
+				Path.Combine(ModuleDirectory, "Private/Solvers"),
 				Path.Combine(ModuleDirectory, "Private/Support")
 			}
 			);
@@ -36,7 +38,7 @@ public class GMCExtended : ModuleRules
 				"Core",
 				"GMCCore",
 				"GameplayTags", "PoseSearch",
-				"StructUtils"
+				"StructUtils", "EnhancedInput"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);

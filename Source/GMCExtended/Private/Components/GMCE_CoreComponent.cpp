@@ -1,5 +1,6 @@
 ﻿#include "Components/GMCE_CoreComponent.h"
 
+#include "GMCExtendedLog.h"
 #include "GMCPawn.h"
 #include "Interfaces/GMCE_SharedVariableComponent.h"
 
@@ -59,7 +60,7 @@ void UGMCE_CoreComponent::BindReplicationData_Implementation()
 	if (!Owner)
 	{
 		// We're not going to be able to do anything, so warn and exit.
-		UE_LOG(LogTemp, Warning, TEXT("Warning: %s has no valid owner."), *GetName())
+		UE_LOG(LogGMCExtended, Warning, TEXT("Warning: %s has no valid owner."), *GetName())
 		return;
 	}
 

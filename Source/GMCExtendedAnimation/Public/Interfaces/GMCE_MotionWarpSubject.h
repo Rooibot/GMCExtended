@@ -26,4 +26,5 @@ public:
 	virtual FVector MotionWarping_GetTranslationOffset() const;
 	virtual FAnimMontageInstance* GetRootMotionAnimMontageInstance(USkeletalMeshComponent* MeshComponent) const;
 	virtual UGMCE_OrganicMovementCmp* GetGMCExMovementComponent() const;
+	virtual void MotionWarping_RecacheValues();
 };

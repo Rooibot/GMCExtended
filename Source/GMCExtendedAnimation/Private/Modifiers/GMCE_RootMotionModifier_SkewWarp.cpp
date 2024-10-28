@@ -1,5 +1,6 @@
 ﻿#include "Modifiers/GMCE_RootMotionModifier_SkewWarp.h"
 
+#include "GMCExtendedAnimationLog.h"
 #include "GMCE_MotionWarpingComponent.h"
 #include "GMCE_MotionWarpingUtilities.h"
 #include "GMCE_MotionWarpSubject.h"
@@ -8,15 +9,8 @@ UGMCE_RootMotionModifier_SkewWarp::UGMCE_RootMotionModifier_SkewWarp(const FObje
 {
 }
 
-FTransform UGMCE_RootMotionModifier_SkewWarp::ProcessRootMotion(const FTransform& InRootMotion, float DeltaSeconds)
+FTransform UGMCE_RootMotionModifier_SkewWarp::ProcessRootMotion(const FTransform& InRootMotion, const FGMCE_MotionWarpContext& WarpContext)
 {
-	AGMC_Pawn* PawnOwner = GetPawnOwner();
-	IGMCE_MotionWarpSubject* MotionWarpInterfacePawn = Cast<IGMCE_MotionWarpSubject>(PawnOwner);
-	if(PawnOwner == nullptr)
-	{
-		return InRootMotion;
-	}
-
 	FTransform FinalRootMotion = InRootMotion;
 
 	const FTransform RootMotionTotal = UGMCE_MotionWarpingUtilities::ExtractRootMotionFromAnimation(AnimationSequence.Get(), PreviousPosition, EndTime);
@@ -30,9 +24,9 @@ FTransform UGMCE_RootMotionModifier_SkewWarp::ProcessRootMotion(const FTransform
 
 	if (bWarpTranslation)
 	{
-		const float CapsuleHalfHeight = MotionWarpInterfacePawn->MotionWarping_GetCollisionHalfHeight();
-		const FQuat CurrentRotation = PawnOwner->GetActorQuat();
-		const FVector CurrentLocation = (PawnOwner->GetActorLocation() - CurrentRotation.GetUpVector() * CapsuleHalfHeight);
+		const float CapsuleHalfHeight = WarpContext.CapsuleHalfHeight;
+		const FQuat CurrentRotation = WarpContext.OwnerTransform.GetRotation();
+		const FVector CurrentLocation = WarpContext.OwnerTransform.GetLocation() - CurrentRotation.GetUpVector() * CapsuleHalfHeight;
 
 		const FVector DeltaTranslation = RootMotionDelta.GetLocation();
 		const FVector TotalTranslation = RootMotionTotal.GetLocation();
@@ -48,8 +42,9 @@ FTransform UGMCE_RootMotionModifier_SkewWarp::ProcessRootMotion(const FTransform
 		{
 			if (!DeltaTranslation.IsNearlyZero())
 			{
-				const FTransform MeshTransform = FTransform(MotionWarpInterfacePawn->MotionWarping_GetRotationOffset(), MotionWarpInterfacePawn->MotionWarping_GetTranslationOffset()) * PawnOwner->GetActorTransform();
-				TargetLocation = MeshTransform.InverseTransformPositionNoScale(TargetLocation);
+				const FTransform MeshTransform = FTransform(WarpContext.MeshRelativeTransform.GetRotation(), WarpContext.MeshRelativeTransform.GetTranslation());
+				const FTransform FinalMeshTransform = WarpContext.MeshRelativeTransform * WarpContext.OwnerTransform;
+				TargetLocation = FinalMeshTransform.InverseTransformPositionNoScale(TargetLocation);
 
 				const FVector WarpedTranslation = WarpTranslation(FTransform::Identity, DeltaTranslation, TotalTranslation, TargetLocation) + ExtraRootMotion.GetLocation();
 				FinalRootMotion.SetTranslation(WarpedTranslation);
@@ -71,7 +66,7 @@ FTransform UGMCE_RootMotionModifier_SkewWarp::ProcessRootMotion(const FTransform
 				const FVector NextLocation = FMath::Lerp<FVector, float>(StartTransform.GetLocation(), TargetLocation, Alpha);
 				FVector FinalDeltaTranslation = (NextLocation - CurrentLocation);
 				FinalDeltaTranslation = (CurrentRotation.Inverse() * DeltaToTarget.ToOrientationQuat()).GetForwardVector() * FinalDeltaTranslation.Size();
-				FinalDeltaTranslation = MotionWarpInterfacePawn->MotionWarping_GetRotationOffset().UnrotateVector(FinalDeltaTranslation);
+				FinalDeltaTranslation = WarpContext.MeshRelativeTransform.GetRotation().UnrotateVector(FinalDeltaTranslation);
 
 				FinalRootMotion.SetTranslation(FinalDeltaTranslation + ExtraRootMotion.GetLocation());
 			}
@@ -80,9 +75,25 @@ FTransform UGMCE_RootMotionModifier_SkewWarp::ProcessRootMotion(const FTransform
 
 	if(bWarpRotation)
 	{
-		const FQuat WarpedRotation = ExtraRootMotion.GetRotation() * WarpRotation(RootMotionDelta, RootMotionTotal, DeltaSeconds);
+		const FQuat WarpedRotation = ExtraRootMotion.GetRotation() * WarpRotation(WarpContext, RootMotionDelta, RootMotionTotal, WarpContext.DeltaSeconds);
 		FinalRootMotion.SetRotation(WarpedRotation);
 	}
+
+	// Debug
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	const int32 DebugLevel = FGMCE_MotionWarpCvars::CVarMotionWarpingDebug.GetValueOnGameThread();
+	if (DebugLevel == 1 || DebugLevel == 3)
+	{
+		PrintLog(TEXT("GMCE_SkewWarp"), InRootMotion, FinalRootMotion);
+	}
+
+	if (DebugLevel >= 2)
+	{
+		const float DrawDebugDuration = FGMCE_MotionWarpCvars::CVarMotionWarpingDrawDebugDuration.GetValueOnGameThread();
+		DrawDebugCoordinateSystem(GetPawnOwner()->GetWorld(), GetTargetLocation(), GetTargetRotator(WarpContext), 50.f, false, DrawDebugDuration, 0, 1.f);
+	}
+#endif
+	
 
 	return FinalRootMotion;
 }

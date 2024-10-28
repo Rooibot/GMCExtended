@@ -7,6 +7,18 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GMCE_MotionWarpingUtilities.generated.h"
 
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+struct FGMCE_MotionWarpContext;
+
+struct GMCEXTENDEDANIMATION_API FGMCE_MotionWarpCvars
+{
+	static TAutoConsoleVariable<int32> CVarMotionWarpingDisable;
+	static TAutoConsoleVariable<int32> CVarMotionWarpingFromTracker;
+	static TAutoConsoleVariable<int32> CVarMotionWarpingDebug;
+	static TAutoConsoleVariable<float> CVarMotionWarpingDrawDebugDuration;
+};
+#endif
+
 /**
  * 
  */
@@ -38,8 +50,14 @@ public:
 	static void GetMotionWarpingWindowsForWarpTargetFromAnimation(const UAnimSequenceBase* Animation, FName WarpTargetName, TArray<FGMCE_MotionWarpingWindowData>& OutWindows);
 
 	/** @return root transform relative to the warp point bone at the supplied time */
+	static FTransform CalculateRootTransformRelativeToWarpPointAtTime(const FTransform& RelativeTransform, const UAnimInstance* AnimInstance, const UAnimSequenceBase* Animation, float Time, const FName& WarpPointBoneName);
+	
+	/** @return root transform relative to the warp point bone at the supplied time */
 	static FTransform CalculateRootTransformRelativeToWarpPointAtTime(AGMC_Pawn* Character, const UAnimSequenceBase* Animation, float Time, const FName& WarpPointBoneName);
 
+	/** @return root transform relative to the warp point transform at the supplied time */
+	static FTransform CalculateRootTransformRelativeToWarpPointAtTime(const FTransform& RelativeTransform, const UAnimSequenceBase* Animation, float Time, const FTransform& WarpPointTransform);
+	
 	/** @return root transform relative to the warp point transform at the supplied time */
 	static FTransform CalculateRootTransformRelativeToWarpPointAtTime(AGMC_Pawn* Character, const UAnimSequenceBase* Animation, float Time, const FTransform& WarpPointTransform);	
 };

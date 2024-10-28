@@ -33,6 +33,13 @@ FVector AGMCE_MotionWarpPawn::MotionWarping_GetTranslationOffset() const
 	return MotionWarp_SkeletalMesh->GetRelativeLocation();
 }
 
+void AGMCE_MotionWarpPawn::MotionWarping_RecacheValues()
+{
+	// Search for (and cache) our skeletal mesh and movement component.
+	MotionWarp_SkeletalMesh = FindComponentByClass<USkeletalMeshComponent>();
+	MotionWarp_MovementComponent = FindComponentByClass<UGMCE_OrganicMovementCmp>();	
+}
+
 FAnimMontageInstance* AGMCE_MotionWarpPawn::GetRootMotionAnimMontageInstance(
 	USkeletalMeshComponent* MeshComponent) const
 {
@@ -48,9 +55,6 @@ UGMCE_OrganicMovementCmp* AGMCE_MotionWarpPawn::GetGMCExMovementComponent() cons
 void AGMCE_MotionWarpPawn::BeginPlay()
 {
 	Super::BeginPlay();
-
-	// Search for (and cache) our skeletal mesh and movement component.
-	MotionWarp_SkeletalMesh = FindComponentByClass<USkeletalMeshComponent>();
-	MotionWarp_MovementComponent = FindComponentByClass<UGMCE_OrganicMovementCmp>();
+	MotionWarping_RecacheValues();
 }
 
