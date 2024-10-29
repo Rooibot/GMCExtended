@@ -2,8 +2,6 @@
 
 
 #include "GMCE_RootMotionModifier_Warp.h"
-
-#include "GMCExtendedAnimation.h"
 #include "GMCExtendedAnimationLog.h"
 #include "GMCE_MotionWarpingComponent.h"
 #include "GMCE_MotionWarpingUtilities.h"
@@ -33,7 +31,7 @@ void UGMCE_RootMotionModifier_Warp::Update(const FGMCE_MotionWarpContext& Contex
 
 		// Get the warp point sent by the game
 		FTransform WarpPointTransformGame = WarpTargetPtr->GetTargetTransform();
-		FTransform Other = WarpTargetPtr->GetTargetTransformFromAnimation(Context.OwnerTransform, Context.MeshRelativeTransform, GetAnimation(), CurrentPosition);
+		FTransform Other = WarpTargetPtr->GetTargetTransformFromAnimation(Context.OwnerTransform, Context.MeshRelativeTransform, Context.AnimationInstance, GetAnimation(), CurrentPosition);
 
 		// Initialize our target transform (where the root should end at the end of the window) with the warp point sent by the game
 		FTransform TargetTransform = Other;
