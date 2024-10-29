@@ -2005,7 +2005,7 @@ void UGMCE_OrganicMovementCmp::CalculateTurnInPlace(float DeltaSeconds)
 			TurnInPlaceSecondsAccumulated = 0.f;
 		}
 			
-		if (TurnInPlaceSecondsAccumulated >= TurnInPlaceDelay || IsInputPresent())
+		if ((TurnInPlaceDelay > 0.f && TurnInPlaceSecondsAccumulated >= TurnInPlaceDelay) || (ControllerAngle >= TurnInPlaceAngleThreshold) || IsInputPresent())
 		{
 			SV_SwapServerState();
 			// We have exceeded our turn-in-place delay, or input is now present.
