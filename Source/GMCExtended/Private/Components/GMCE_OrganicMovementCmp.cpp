@@ -857,11 +857,11 @@ float UGMCE_OrganicMovementCmp::GetInputAccelerationCustom_Implementation() cons
 
 void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 {
-	if (IsMovingOnGround() && ShouldTurnInPlace())
+	if (IsMovingOnGround())
 	{
 		// If we're using "Require Facing Before Move" and we're on the ground and we're not currently
 		// moving, we want to check the direction we're TRYING to face and see if we're offset at all.
-		if (bRequireFacingBeforeMove && Velocity.IsNearlyZero())
+		if (ShouldTurnInPlace() && Velocity.IsNearlyZero())
 		{
 			if (bOrientToControlRotationDirection && TurnInPlaceAngleThreshold > 0.f)
 			{
@@ -930,7 +930,6 @@ void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 					ProcessedInputVector = ProcessedInputVector.Size2D() * NewDirection;
 				}
 			}
-			
 		}
 	}
 
@@ -1017,7 +1016,7 @@ void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
 		return;
 	}
 
-	if (GetOwnerRole() != ROLE_SimulatedProxy && (IsTurningInPlace() || TurnInPlaceState == EGMCE_TurnInPlaceState::Starting || (bOrientToControlRotationDirection && Velocity.IsNearlyZero() && (!HasRootMotion() || RootMotionMetaData.bApplyRotationWithRootMotion))))
+	if (ShouldTurnInPlace() && GetOwnerRole() != ROLE_SimulatedProxy && (IsTurningInPlace() || TurnInPlaceState == EGMCE_TurnInPlaceState::Starting || (bOrientToControlRotationDirection && Velocity.IsNearlyZero() && (!HasRootMotion() || RootMotionMetaData.bApplyRotationWithRootMotion))))
 	{
 		CalculateTurnInPlace(DeltaSeconds);
 		return;
