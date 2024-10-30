@@ -63,7 +63,6 @@ void UAnimNotifyState_GMCExMotionWarp::OnRootMotionModifierDeactivate(UGMCE_Moti
 	OnWarpEnd(Component, Modifier);
 }
 
-#if WITH_EDITOR
 FString UAnimNotifyState_GMCExMotionWarp::GetNotifyName_Implementation() const
 {
 	if (!RootMotionModifier)
@@ -84,6 +83,7 @@ FString UAnimNotifyState_GMCExMotionWarp::GetNotifyName_Implementation() const
 	return ReturnValue;
 }
 
+#if WITH_EDITOR
 void UAnimNotifyState_GMCExMotionWarp::ValidateAssociatedAssets()
 {
 	static const FName NAME_AssetCheck("AssetCheck");
@@ -125,7 +125,6 @@ void UAnimNotifyState_GMCExMotionWarp::ValidateAssociatedAssets()
 				AssetCheckLog.Notify(MessageLooping, EMessageSeverity::Warning, true);
 			}
 		}
-	}
-	
+	}	
 }
 #endif
