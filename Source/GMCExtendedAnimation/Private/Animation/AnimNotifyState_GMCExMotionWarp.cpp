@@ -63,6 +63,7 @@ void UAnimNotifyState_GMCExMotionWarp::OnRootMotionModifierDeactivate(UGMCE_Moti
 	OnWarpEnd(Component, Modifier);
 }
 
+#if WITH_EDITOR
 FString UAnimNotifyState_GMCExMotionWarp::GetNotifyName_Implementation() const
 {
 	if (!RootMotionModifier)
@@ -70,7 +71,7 @@ FString UAnimNotifyState_GMCExMotionWarp::GetNotifyName_Implementation() const
 		return FString(TEXT("GMCEx Motion Warping"));
 	}
 
-	FString ReturnValue = RootMotionModifier->GetClass()->GetDisplayNameText().ToString();
+	FString ReturnValue = RootMotionModifier->GetClass()->GetName();
 
 	FString ModifierText = RootMotionModifier->DisplayString();
 
@@ -83,7 +84,6 @@ FString UAnimNotifyState_GMCExMotionWarp::GetNotifyName_Implementation() const
 	return ReturnValue;
 }
 
-#if WITH_EDITOR
 void UAnimNotifyState_GMCExMotionWarp::ValidateAssociatedAssets()
 {
 	static const FName NAME_AssetCheck("AssetCheck");
