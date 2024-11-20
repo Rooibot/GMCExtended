@@ -1968,6 +1968,9 @@ bool UGMCE_OrganicMovementCmp::ShouldTurnInPlace() const
 	// Turn in place is disabled.
 	if (TurnInPlaceType == EGMCE_TurnInPlaceType::None) return false;
 
+	// If we have root motion present, allow it to drive us rather than trying to turn in place.
+	if (HasRootMotion()) return false;
+
 	// Turn in place is driven by movement component but has an instant rotation rate.
 	if (TurnInPlaceType == EGMCE_TurnInPlaceType::MovementComponent && TurnInPlaceRotationRate <= 0.f) return false;
 

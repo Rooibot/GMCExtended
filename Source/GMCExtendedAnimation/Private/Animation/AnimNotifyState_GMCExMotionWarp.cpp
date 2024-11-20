@@ -71,7 +71,7 @@ FString UAnimNotifyState_GMCExMotionWarp::GetNotifyName_Implementation() const
 		return FString(TEXT("GMCEx Motion Warping"));
 	}
 
-	FString ReturnValue = RootMotionModifier->GetClass()->GetDisplayNameText().ToString();
+	FString ReturnValue = RootMotionModifier->GetClass()->GetName();
 
 	FString ModifierText = RootMotionModifier->DisplayString();
 
@@ -125,7 +125,6 @@ void UAnimNotifyState_GMCExMotionWarp::ValidateAssociatedAssets()
 				AssetCheckLog.Notify(MessageLooping, EMessageSeverity::Warning, true);
 			}
 		}
-	}
-	
+	}	
 }
 #endif
