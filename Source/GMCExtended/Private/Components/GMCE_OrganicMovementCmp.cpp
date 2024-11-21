@@ -1033,10 +1033,10 @@ void UGMCE_OrganicMovementCmp::MontageUpdate(float DeltaSeconds)
 }
 
 void UGMCE_OrganicMovementCmp::OnMontageStarted(UAnimMontage* Montage, float Position, float PlayRate,
-                                                bool bInterrupted, float DeltaSeconds)
+                                                bool bInterrupted, float MontageDelta, float DeltaSeconds)
 {
 	PreviousMontagePosition = Position;
-	Super::OnMontageStarted(Montage, Position, PlayRate, bInterrupted, DeltaSeconds);
+	Super::OnMontageStarted(Montage, Position, PlayRate, bInterrupted, MontageDelta, DeltaSeconds);
 }
 
 FString UGMCE_OrganicMovementCmp::GetComponentDescription() const
@@ -1054,7 +1054,7 @@ FString UGMCE_OrganicMovementCmp::GetComponentDescription() const
 #pragma region Animation Support
 
 void UGMCE_OrganicMovementCmp::PreProcessRootMotion(const FGMC_AnimMontageInstance& MontageInstance,
-	FRootMotionMovementParams& InOutRootMotionParams, float DeltaSeconds)
+	FRootMotionMovementParams& InOutRootMotionParams, float MontageDelta, float DeltaSeconds)
 {
 	// If we've got a bound delegate to handle modifying root motion, call it. This is used by GMCExAnim to
 	// handle motion warping.
@@ -1067,7 +1067,7 @@ void UGMCE_OrganicMovementCmp::PreProcessRootMotion(const FGMC_AnimMontageInstan
 		InOutRootMotionParams.Set(WarpedRootMotionTransform);
 	}
 
-	Super::PreProcessRootMotion(MontageInstance, InOutRootMotionParams, DeltaSeconds);
+	Super::PreProcessRootMotion(MontageInstance, InOutRootMotionParams, MontageDelta, DeltaSeconds);
 }
 
 void UGMCE_OrganicMovementCmp::OnSyncDataApplied_Implementation(const FGMC_PawnState& State, EGMC_NetContext Context)

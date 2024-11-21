@@ -96,7 +96,7 @@ public:
 	virtual void ApplyRotation(bool bIsDirectBotMove, const FGMC_RootMotionVelocitySettings& RootMotionMetaData, float DeltaSeconds) override;
 
 	virtual void MontageUpdate(float DeltaSeconds) override;
-	virtual void OnMontageStarted(UAnimMontage* Montage, float Position, float PlayRate, bool bInterrupted, float DeltaSeconds) override;
+	virtual void OnMontageStarted(UAnimMontage* Montage, float Position, float PlayRate, bool bInterrupted, float MontageDelta, float DeltaSeconds) override;
 
 	// General functionality
 
@@ -226,7 +226,7 @@ private:
 
 #pragma region Animation Support
 protected:
-	virtual void PreProcessRootMotion(const FGMC_AnimMontageInstance& MontageInstance, FRootMotionMovementParams& InOutRootMotionParams, float DeltaSeconds) override;
+	virtual void PreProcessRootMotion(const FGMC_AnimMontageInstance& MontageInstance, FRootMotionMovementParams& InOutRootMotionParams, float MontageDelta, float DeltaSeconds) override;
 	virtual void OnSyncDataApplied_Implementation(const FGMC_PawnState& State, EGMC_NetContext Context) override;
 
 	void UpdateAnimationHelperValues(float DeltaSeconds);
