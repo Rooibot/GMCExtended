@@ -938,7 +938,7 @@ void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 	if (!Velocity.IsNearlyZero())
 	{
 		TurnInPlaceSecondsAccumulated = 0.f;
-		TurnInPlaceDelayedDirection = FVector::ZeroVector;
+		//TurnInPlaceDelayedDirection = FVector::ZeroVector;
 	}
 }
 
