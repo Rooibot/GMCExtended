@@ -1809,7 +1809,14 @@ void UGMCE_OrganicMovementCmp::RunSolvers(float DeltaTime)
 	
 	for (const auto& Solver : Solvers)
 	{
-		Solver->RunSolver(State, DeltaTime);
+		if (Solver->RunSolver(State, DeltaTime))
+		{
+			FGameplayTag SolverTag = Solver->GetTag();
+			if (SolverTag != FGameplayTag::EmptyTag && !State.AvailableSolvers.HasTag(SolverTag))
+			{
+				State.AvailableSolvers.AddTag(SolverTag);
+			}
+		}
 	}
 
 	AvailableSolvers = State.AvailableSolvers;	
