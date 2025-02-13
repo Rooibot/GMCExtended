@@ -426,10 +426,10 @@ void UGMCE_OrganicMovementCmp::PreMovementUpdate_Implementation(float DeltaSecon
 	RunSolvers(DeltaSeconds);	
 }
 
-void UGMCE_OrganicMovementCmp::PreSimulatedMoveExecution_Implementation(const FGMC_PawnState& InputState,
-	bool bCumulativeUpdate, float DeltaTime, double Timestamp)
+void UGMCE_OrganicMovementCmp::PreSimulatedMoveExecution_Implementation(FGMC_PawnState& InputState,
+	bool bCumulativeUpdate, bool bRollback, float DeltaTime, double Timestamp)
 {
-	Super::PreSimulatedMoveExecution_Implementation(InputState, bCumulativeUpdate, DeltaTime, Timestamp);
+	Super::PreSimulatedMoveExecution_Implementation(InputState, bCumulativeUpdate, bRollback, DeltaTime, Timestamp);
 }
 
 void UGMCE_OrganicMovementCmp::MovementUpdate_Implementation(float DeltaSeconds)

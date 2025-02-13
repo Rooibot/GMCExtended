@@ -107,7 +107,7 @@ void UGMCE_CoreComponent::OnSyncDataApplied_Implementation(const FGMC_PawnState&
 	// This should ensure full coverage to check for variable updates (and notify any delegates) if values have
 	// changed since the last time through.
 	if (Context == EGMC_NetContext::LocalClientPawn_PostMoveExecution ||
-		Context == EGMC_NetContext::LocalClientPawn_ServerStateAdoptedForReplay ||
+		Context == EGMC_NetContext::LocalClientPawn_ServerStateAdopted ||
 		Context == EGMC_NetContext::LocalServerPawn_PostMoveExecution ||
 		Context == EGMC_NetContext::RemoteServerPawn_PostMoveExecution ||
 		Context == EGMC_NetContext::RemoteClientPawn_Simulation)

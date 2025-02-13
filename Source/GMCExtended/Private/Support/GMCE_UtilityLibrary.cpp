@@ -1,5 +1,4 @@
 ﻿#include "Support/GMCE_UtilityLibrary.h"
-
 #include "GMCPlayerController.h"
 #include "Kismet/KismetMathLibrary.h"
 
@@ -98,5 +97,5 @@ float UGMCE_UtilityLibrary::GetSynchronizedWorldTime(UObject* WorldContextObject
 	if (!Controller) return 0.f;
 
 	// Get the GMC-provided synchronized server world time.
-	return Controller->CL_GetSyncedWorldTimeSeconds();
+	return Controller->GetSyncedWorldTimeSeconds();
 }

@@ -66,7 +66,7 @@ public:
 	virtual void BindReplicationData_Implementation() override;
 	virtual FVector PreProcessInputVector_Implementation(FVector InRawInputVector) override;
 	virtual void PreMovementUpdate_Implementation(float DeltaSeconds) override;
-	virtual void PreSimulatedMoveExecution_Implementation(const FGMC_PawnState& InputState, bool bCumulativeUpdate, float DeltaTime, double Timestamp) override;
+	virtual void PreSimulatedMoveExecution_Implementation(FGMC_PawnState& InputState, bool bCumulativeUpdate, bool bRollback, float DeltaTime, double Timestamp) override;
 	virtual void MovementUpdate_Implementation(float DeltaSeconds) override;
 	virtual void MovementUpdateSimulated_Implementation(float DeltaSeconds) override;
 	virtual void GenSimulationTick_Implementation(float DeltaTime) override;

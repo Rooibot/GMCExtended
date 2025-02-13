@@ -46,14 +46,14 @@ void UAnimNotifyState_GMCExEarlyBlendOut::NotifyTick(USkeletalMeshComponent* Mes
 
 	if (ShouldBlendOut(MovementComponent, false))
 	{
-		MovementComponent->StopMontage(MeshComp, MovementComponent->MontageTracker, BlendOutTime, true);
+		MovementComponent->StopMontage(MeshComp, MovementComponent->MontageTracker, BlendOutTime);
 
 		if (MovementComponent->IsSmoothedListenServerPawn())
 		{
 			// If we're a smoothed listen server pawn, we want to make sure we stop montage on both the simulated version
 			// (for smoothness) and the real server version (for, y'know, general network accuracy).
 			MovementComponent->SV_SwapServerState();
-			MovementComponent->StopMontage(MeshComp, MovementComponent->MontageTracker, BlendOutTime, true);
+			MovementComponent->StopMontage(MeshComp, MovementComponent->MontageTracker, BlendOutTime);
 			MovementComponent->SV_SwapServerState();			
 		}
 
