@@ -29,25 +29,15 @@ public:
 	/// defined by their cross product.
 	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
 	static float GetAngleDifference(const FVector& A, const FVector& B);
-
-	/// Converts a GMCEx Movement Sample into an Epic Trajectory Sample.
-	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
-	static FTrajectorySample ConvertMovementSampleToTrajectorySample(const FGMCE_MovementSample& MovementSample);
-
-	PRAGMA_DISABLE_DEPRECATION_WARNINGS	
-	/// Converts a GMCEx Movement Sample Collection into an Epic Trajectory Sample Range.
-	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
-	static FTrajectorySampleRange ConvertMovementSampleCollectionToTrajectorySampleRange(const FGMCE_MovementSampleCollection& MovementSampleCollection);
-	PRAGMA_ENABLE_DEPRECATION_WARNINGS
-
-	/// Converts a GMCEx Movement Sample into an Epic Pose Search Query Trajectory Sample.
-	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
-	static FPoseSearchQueryTrajectorySample ConvertMovementSampleCollectionToPoseSearchQueryTrajectorySample(const FGMCE_MovementSample& MovementSample);
 	
-	/// Converts a GMCEx Movement Sample Collection into an Epic Pose Search Query Trajectory.
+	/// Converts a GMCEx Movement Sample into an Epic Transform Trajectory Sample.
 	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
-	static FPoseSearchQueryTrajectory ConvertMovementSampleCollectionToPoseSearchQueryTrajectory(const FGMCE_MovementSampleCollection& MovementSampleCollection);
-
+	static FTransformTrajectorySample ConvertMovementSampleCollectionToTransformTrajectorySample(const FGMCE_MovementSample& MovementSample);
+	
+	/// Converts a GMCEx Movement Sample Collection into an Epic Transform Trajectory.
+	UFUNCTION(BlueprintPure, Category="Movement Trajectory")
+	static FTransformTrajectory ConvertMovementSampleCollectionToTransformTrajectory(const FGMCE_MovementSampleCollection& MovementSampleCollection);
+	
 	/// Get the server's RealTimeSeconds, as synchronized by GMC.
 	UFUNCTION(BlueprintPure, Category="Time")
 	static float GetSynchronizedWorldTime(UObject *WorldContextObject);

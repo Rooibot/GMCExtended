@@ -771,7 +771,7 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 				FVector NewLocation = CurrentRagdollGoal;
 				NewLocation.Z = UpdatedComponent->GetComponentLocation().Z;
 				FCollisionQueryParams CollisionParameters = FCollisionQueryParams(NAME_None, true, GetOwner());
-				CollisionParameters.AddIgnoredComponent(UpdatedPrimitive);
+				//CollisionParameters.AddIgnoredComponent(UpdatedPrimitive);
 				
 				FHitResult GroundHit;
 				const FVector StartCheck = CurrentRagdollGoal + FVector(0.f, 0.f, PreviousCollisionHalfHeight);
