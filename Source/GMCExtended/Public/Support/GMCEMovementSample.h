@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "GMCExtendedLog.h"
 #include "Animation/MotionTrajectoryTypes.h"
-#include "Animation/TrajectoryTypes.h"
 #include "PoseSearch/PoseSearchTrajectoryTypes.h"
 #include "GMCEMovementSample.generated.h"
 
@@ -218,11 +217,23 @@ struct GMCEXTENDED_API FGMCE_MovementSample
 	void DrawDebug(const UWorld* World, const FTransform& FromOrigin = FTransform::Identity, const FColor& Color = FColor::Purple, float LifeTime = -1.f) const;
 
 	// ReSharper disable once CppNonExplicitConversionOperator
-	operator FTransformTrajectorySample() const
+	operator FTrajectorySample() const
 	{
-		FTransformTrajectorySample Result;
+		FTrajectorySample Result;
+		
+		Result.LinearVelocity = RelativeLinearVelocity;
+		Result.AccumulatedSeconds = AccumulatedSeconds;
+		Result.Transform = RelativeTransform;
 
-		Result.TimeInSeconds = AccumulatedSeconds;
+		return Result;
+	}
+
+	// ReSharper disable once CppNonExplicitConversionOperator
+	operator FPoseSearchQueryTrajectorySample() const
+	{
+		FPoseSearchQueryTrajectorySample Result;
+
+		Result.AccumulatedSeconds = AccumulatedSeconds;
 		Result.Position = WorldTransform.GetTranslation();  
 		Result.Facing = WorldTransform.GetRotation();
 
@@ -249,9 +260,9 @@ struct GMCEXTENDED_API FGMCE_MovementSampleCollection
 			if (Time < Samples[0].AccumulatedSeconds) return Samples[0];
 			if (Time > Samples.Last().AccumulatedSeconds) return Samples.Last();
 			
-			const int32 LowerBoundIdx = Algo::LowerBound(Samples, Time, [](const FTransformTrajectorySample& TrajectorySample, float Value)
+			const int32 LowerBoundIdx = Algo::LowerBound(Samples, Time, [](const FPoseSearchQueryTrajectorySample& TrajectorySample, float Value)
 				{
-					return Value > TrajectorySample.TimeInSeconds;
+					return Value > TrajectorySample.AccumulatedSeconds;
 				});
 
 			const int32 NextIdx = FMath::Clamp(LowerBoundIdx, 1, Samples.Num() - 1);
@@ -288,18 +299,40 @@ struct GMCEXTENDED_API FGMCE_MovementSampleCollection
 
 		return false;
 	}
+	
+	// Disable the deprecation warnings for 5.3+ so we can still use the older struct if people need it.
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS
 
 	// ReSharper disable once CppNonExplicitConversionOperator
-	operator FTransformTrajectory() const
+	operator FTrajectorySampleRange() const
 	{
-		FTransformTrajectory Result;
+		FTrajectorySampleRange Result;
 		Result.Samples.Reserve(Samples.Num());
 
 		for (const FGMCE_MovementSample& Sample : Samples)
 		{
-			Result.Samples.Emplace(static_cast<FTransformTrajectorySample>(Sample));
+			// Implicit conversion gives us an FTrajectorySample
+			Result.Samples.Emplace(static_cast<FTrajectorySample>(Sample));
 		}
 
 		return Result;
 	}
+
+	// ReSharper disable once CppNonExplicitConversionOperator
+	operator FPoseSearchQueryTrajectory() const
+	{
+		FPoseSearchQueryTrajectory Result;
+		Result.Samples.Reserve(Samples.Num());
+
+		for (const FGMCE_MovementSample& Sample : Samples)
+		{
+			Result.Samples.Emplace(static_cast<FPoseSearchQueryTrajectorySample>(Sample));
+		}
+
+		return Result;
+	}
+
+	// Re-enable deprecation warnings
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
+	
 };

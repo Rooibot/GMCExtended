@@ -18,7 +18,7 @@
 		{
 			"Name": "GMCExtended",
 			"Type": "Runtime",
-			"LoadingPhase": "PreDefault"
+			"LoadingPhase": "Default"
 		},
 		{
 			"Name": "GMCExtendedAnimation",
