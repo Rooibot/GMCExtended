@@ -771,7 +771,7 @@ void UGMCE_OrganicMovementCmp::PhysicsCustom_Implementation(float DeltaSeconds)
 				FVector NewLocation = CurrentRagdollGoal;
 				NewLocation.Z = UpdatedComponent->GetComponentLocation().Z;
 				FCollisionQueryParams CollisionParameters = FCollisionQueryParams(NAME_None, true, GetOwner());
-				CollisionParameters.AddIgnoredComponent(UpdatedPrimitive);
+				//CollisionParameters.AddIgnoredComponent(UpdatedPrimitive);
 				
 				FHitResult GroundHit;
 				const FVector StartCheck = CurrentRagdollGoal + FVector(0.f, 0.f, PreviousCollisionHalfHeight);
@@ -896,7 +896,7 @@ void UGMCE_OrganicMovementCmp::CalculateVelocity(float DeltaSeconds)
 		
 					if (bUseSafeRotations)
 					{
-						RotateYawTowardsDirectionSafe(InputDirection, RotationRate, DeltaSeconds);
+						RotateYawTowardsDirectionSafe(InputDirection, RotationRate, SafeRotationCollisionTolerance, DeltaSeconds);
 					}
 					else
 					{
@@ -962,9 +962,9 @@ void UGMCE_OrganicMovementCmp::RotateYawTowardsDirection(const FVector& Directio
 	CalculateAimYawRemaining(Direction);
 }
 
-bool UGMCE_OrganicMovementCmp::RotateYawTowardsDirectionSafe(const FVector& Direction, float Rate, float DeltaTime)
+bool UGMCE_OrganicMovementCmp::RotateYawTowardsDirectionSafe(const FVector& Direction, float Rate, float CollisionTolerance, float DeltaTime)
 {
-	const bool bResult = Super::RotateYawTowardsDirectionSafe(Direction, Rate, DeltaTime);
+	const bool bResult = Super::RotateYawTowardsDirectionSafe(Direction, Rate, CollisionTolerance, DeltaTime);
 
 	CalculateAimYawRemaining(Direction);
 	
@@ -1007,7 +1007,7 @@ void UGMCE_OrganicMovementCmp::ApplyRotation(bool bIsDirectBotMove,
 		
 		if(bUseSafeRotations)
 		{
-			RotateYawTowardsDirectionSafe(OrientTowards, RotationRate, DeltaSeconds);
+			RotateYawTowardsDirectionSafe(OrientTowards, RotationRate, SafeRotationCollisionTolerance, DeltaSeconds);
 		}
 		else
 		{
@@ -2078,7 +2078,7 @@ void UGMCE_OrganicMovementCmp::ApplyTurnInPlace(float DeltaSeconds, bool bSimula
 		// Either we're using movement component logic, OR we didn't have a valid curve we were supposed to use.
 		if (bUseSafeRotations)
 		{
-			RotateYawTowardsDirectionSafe(TurnInPlaceDelayedDirection, TurnInPlaceRotationRate, DeltaSeconds);				
+			RotateYawTowardsDirectionSafe(TurnInPlaceDelayedDirection, TurnInPlaceRotationRate, SafeRotationCollisionTolerance, DeltaSeconds);				
 		}
 		else
 		{
