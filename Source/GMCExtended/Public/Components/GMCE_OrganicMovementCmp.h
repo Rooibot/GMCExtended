@@ -89,7 +89,7 @@ public:
 	virtual void OnLanded_Implementation(const FVector& ImpactVelocity) override;
 
 	virtual void RotateYawTowardsDirection(const FVector& Direction, float Rate, float DeltaTime) override;
-	virtual bool RotateYawTowardsDirectionSafe(const FVector& Direction, float Rate, float DeltaTime) override;
+	virtual bool RotateYawTowardsDirectionSafe(const FVector& Direction, float Rate,float CollisionTolerance, float DeltaTime) override;
 
 	virtual UPrimitiveComponent* FindActorBase_Implementation() override;
 
