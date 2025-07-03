@@ -142,6 +142,7 @@ void UGMCE_MotionWarpingComponent::Update(FGMCE_MotionWarpContext& WarpContext)
 
 		if (WarpContext.CurrentPosition == 0.f && WarpContext.PreviousPosition == 0.f && WarpContext.PlayRate == 0.f)
 		{
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 			if (FGMCE_MotionWarpCvars::CVarMotionWarpingFromTracker.GetValueOnGameThread())
 			{
 				// Read our values from our montage tracker
@@ -155,6 +156,11 @@ void UGMCE_MotionWarpingComponent::Update(FGMCE_MotionWarpContext& WarpContext)
 				WarpContext.PreviousPosition = RootMotionMontageInstance->GetPreviousPosition();
 				WarpContext.PlayRate = RootMotionMontageInstance->GetPlayRate();
 			}
+#else
+			WarpContext.CurrentPosition = RootMotionMontageInstance->GetPosition();
+			WarpContext.PreviousPosition = RootMotionMontageInstance->GetPreviousPosition();
+			WarpContext.PlayRate = RootMotionMontageInstance->GetPlayRate();
+#endif
 		}
 		
 		const float ExpectedDelta = WarpContext.DeltaSeconds * WarpContext.PlayRate;

@@ -45,6 +45,7 @@ public:
 
 #if WITH_EDITOR
 	virtual FString GetNotifyName_Implementation() const override;
+	
 	virtual void ValidateAssociatedAssets() override;
 #endif
 };
